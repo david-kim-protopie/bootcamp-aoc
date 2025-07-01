@@ -28,15 +28,13 @@
 ;; 예) +3, +3, +4, -2, -4 는 10이 처음으로 두번 나오는 숫자임.
 ;; 0 -> 3 (+3) -> 6 (+3) -> 10(+4) -> 8(-2) -> 4(-4) -> 7(+3) -> 10(+3) -> ...
 (comment
-  (let [duplicateSet (atom #{})]
-    (println
-      (reduce (fn [sum number]
-                (let [new-sum (+ sum number)]
-                  (if (contains? @duplicateSet new-sum)
-                    (reduced new-sum))
-                  (do
-                    (swap! duplicateSet conj new-sum)
-                    new-sum)))
-              0
-              (parse-strings-to-numbers (read-file-to-list "resources/aoc2018_1.sample.part2.txt"))
-              ))))
+  (println
+    (first (reduce (fn [state-vector number]
+              (let [new-sum (+ (first state-vector) number)]
+                (if (contains? (second state-vector) new-sum)
+                  (reduced new-sum))
+                (do
+                  [new-sum (conj (second state-vector) new-sum)])))
+            [0 #{}]
+            (parse-strings-to-numbers (read-file-to-list "resources/aoc2018_1.sample.part2.txt"))
+            ))))
