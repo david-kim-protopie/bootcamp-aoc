@@ -25,4 +25,15 @@
 ;; 주어진 입력의 숫자를 더할 때 마다 나오는 숫자 중, 처음으로 두번 나오는 숫자를 리턴하시오.
 ;; 예) +3, +3, +4, -2, -4 는 10이 처음으로 두번 나오는 숫자임.
 ;; 0 -> 3 (+3) -> 6 (+3) -> 10(+4) -> 8(-2) -> 4(-4) -> 7(+3) -> 10(+3) -> ...
-
+(let [duplicateSet (atom #{})]
+  (println
+    (reduce (fn [sum number]
+              (let [new-sum (+ sum number)]
+                (if (contains? @duplicateSet new-sum)
+                    (reduced new-sum))
+                    (do
+                      (swap! duplicateSet conj new-sum)
+                      new-sum)))
+            0
+            (parse-strings-to-numbers (read-file-to-list "resources/aoc2018_1.sample.part2.txt"))
+            )))
