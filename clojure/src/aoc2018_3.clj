@@ -74,20 +74,24 @@
     예시에 있는 vo 역할을 하는 map list 타입의 입력을 받는다.
     입력받은 데이터에서 좌표(coordinate)가 중복이라면, 병합된 ids를 갖는 맵을 반환한다.
   "
-  [vo-map-list]
+  [coordinate-map-list]
   (reduce (fn [source target]
             (merge-with
               (fn [old new] (distinct (concat old new)))
               source
               target))
           {}
-          (mapcat generate-ids-include-coordinate-map vo-map-list)))
+          coordinate-map-list))
 
 (def transformed-vo-map-list
   (map transform-data-vector-to-vo-map
        (map #(re-matches #"#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)" %) sample-input)))
 
-(def board (merge-ids-by-value-with-coordinate-map transformed-vo-map-list))
+(println transformed-vo-map-list)
+
+(def board
+  (merge-ids-by-value-with-coordinate-map
+    (mapcat generate-ids-include-coordinate-map transformed-vo-map-list)))
 
 (comment
   (count (filter (fn [[coordinate ids]]
