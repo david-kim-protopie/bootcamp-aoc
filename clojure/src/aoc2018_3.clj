@@ -94,7 +94,7 @@
     (mapcat generate-ids-include-coordinate-map transformed-vo-map-list)))
 
 (comment
-  (count (filter (fn [[coordinate ids]]
+  (count (filter (fn [[_ ids]]
                    (< 1 (count ids)))
                  board)))
 
@@ -107,6 +107,6 @@
     (set (map #(:id %) transformed-vo-map-list))
     (set (flatten
            (map #(second %)
-                (filter (fn [[coordinate ids]]
+                (filter (fn [[_ ids]]
                           (< 1 (count ids)))
                         board))))))
