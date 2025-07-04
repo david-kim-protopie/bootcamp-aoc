@@ -76,6 +76,11 @@
        (re-find #"#(\d+)")
        (second)))
 
+(defn sort-records
+  "시간순으로 로그를 정렬합니다."
+  [records]
+  (sort-by (juxt :year :month :day :hour :minute) records))
+
 ;; process 단계
 (defn process-records
   "로그에 guard-id를 추가하고, 수면 관련 이벤트만 필터링합니다."
@@ -117,6 +122,7 @@
   [file-path]
   (->> (read-file-lines file-path)
        (map parse-line-to-record)
+       (sort-records)
        (process-records)
        (aggregate-sleep-data)
        (solve-part1)
@@ -129,26 +135,27 @@
 ;; 주어진 분(minute)에 가장 많이 잠들어 있던 가드의 ID과 그 분(minute)을 곱한 값을 구하라.
 (defn solve-part2
   "집계된 데이터에서 문제의 답 찾습니다."
-  [asleep-minute aggregated-data]
+  [aggregated-data]
   (->> aggregated-data
        (mapcat (fn [[id data]]
-                 (when-let [freq (get (:freqs data) asleep-minute)]
-                   [{:id id, :freq freq}])))
+                 (map (fn [[minute freq]]
+                        {:id id, :minute minute, :freq freq})
+                      (:freqs data))))
        (apply max-key :freq)
-       (:id)
-       (parse-long)
-       (* asleep-minute)
-       ))
+       ((fn [matched-condition-data]
+         (* (parse-long (:id matched-condition-data))
+            (:minute matched-condition-data))))))
 
 (defn repose-record-part2
   "aoc 2018 day4 part2 main 함수"
-  [file-path, asleep-minute]
+  [file-path]
   (->> (read-file-lines file-path)
        (map parse-line-to-record)
+       (sort-records)
        (process-records)
        (aggregate-sleep-data)
-       (solve-part2 asleep-minute)
+       (solve-part2)
        ))
 
 (comment
-  (repose-record-part2 "resources/aoc2018_4.sample.txt" 45))
+  (repose-record-part2 "resources/aoc2018_4.sample.txt"))
