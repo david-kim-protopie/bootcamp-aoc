@@ -79,14 +79,17 @@
 (defn sort-records
   "시간순으로 로그를 정렬합니다."
   [records]
-  (sort-by (juxt :year :month :day :hour :minute) records))
+  (sort-by (juxt :year :month :day :hour :minute) records)) ;; 이해하기 Comp
 
 ;; process 단계
+;; 정확하게 어떤 기능을 하는지 네이밍,
 (defn process-records
-  "로그에 guard-id를 추가하고, 수면 관련 이벤트만 필터링합니다."
+  "로그에 guard-id를 추가하고, 수면 관련 이벤트만 필터링합니다.
+  [{:year 1518, :month 11, :day 01, :hour 00, :minute 05, :content falls asleep, :guard-id 10} ...]
+  "
   [records]
   (->> records
-       (reduce
+       (reduce                                              ;; 익명함수는 최대한 지양하기
            (fn [{:keys [id] :as acc} record]
              (if-let [new-id (extract-guard-id (:content record))]
                (assoc acc :id new-id)
@@ -94,7 +97,11 @@
            {:id nil, :events []})
        (:events)))
 
+;; 객체지향 - 재사용 가능한 코드 함수, 함수형 - 함수 이름으로 기능을 나타낼 수 있으면
+;; 함수 이름이 길어도 허용
 ;; aggregate 단계
+;; 분리가 될 수 있다.
+;; let binding에 익명함수 선언하기 -> 읽기가 쉬워짐 / 혹은 private 으로 선언하기
 (defn aggregate-sleep-data
   "처리된 로그를 바탕으로 Guard별 수면 데이터를 집계합니다."
   [processed-records]
@@ -103,29 +110,29 @@
        (map (fn [[id events]]
               (let [minutes-slept (->> events
                                        (partition 2)        ;; 잠듬 / 깸 짝을 짖기 위한 partition 함수 호출
-                                       (mapcat (fn [[asleep wake]]
+                                       (mapcat (fn [[asleep wake]] ;; 함수 하나에 하나의 작업, 순수함수 멱등성
                                                  (range (parse-long (:minute asleep))
-                                                        (parse-long (:minute wake))))))]
+                                                        (parse-long (:minute wake))))))] ;; parse 단계가 아닌데 parse가 있음, 이전 단계에서 이미 처리가 되었어야함
                 [id {:total (count minutes-slept)
                      :freqs (frequencies minutes-slept)}])))))
 
 (defn solve-part1
   "집계된 데이터에서 문제의 답 찾습니다."
   [aggregated-data]
-  (let [[id {:keys [freqs]}] (apply max-key (fn [[_ v]] (:total v)) aggregated-data)
-        [minute _]           (apply max-key val freqs)]
+  (let [[id {:keys [freqs]}] (apply max-key (fn [[_ v]] (:total v)) aggregated-data) ;; (+ 1 2 3 4 5) reduce, apply 비교 / max-key를 사용하려면 apply를 쓸 수 밖에 없음
+        [minute _frequency]  (apply max-key val freqs)] ;; 사용하지 않는 변수 접두사_ 사용
     (* (parse-long id) minute)))
 
 
 (defn repose-record-part1
   "aoc 2018 day4 part1 main 함수"
-  [file-path]
-  (->> (read-file-lines file-path)
-       (map parse-line-to-record)
-       (sort-records)
-       (process-records)
-       (aggregate-sleep-data)
-       (solve-part1)
+  [file-path]                                               ;;
+  (->> (read-file-lines file-path)                          ;; thread macro first, last 혼용하지 말기
+       (map parse-line-to-record)                           ;; reduce operator는 별도로 빼기 난해
+       (sort-records)                                       ;; loop 재귀함수
+       (process-records)                                    ;; reduce <-> loop(~= 재귀함수), 같은걸 바꿔가면서 더 나은 사용법을 찾아 적용하기
+       (aggregate-sleep-data)                               ;; map thread macro first
+       (solve-part1)                                        ;; seq thread macro last
     ))
 
 (comment
@@ -138,11 +145,11 @@
   [aggregated-data]
   (->> aggregated-data
        (mapcat (fn [[id data]]
-                 (map (fn [[minute freq]]
+                 (map (fn [[minute freq]]                   ;; 익명함수 최대한 지양, 1줄로 처리 가능한 경우만 사용할 것
                         {:id id, :minute minute, :freq freq})
                       (:freqs data))))
        (apply max-key :freq)
-       ((fn [matched-condition-data]
+       ((fn [matched-condition-data]                        ;;let binding을 사용하는게 더 간결한 코드를 작성할 수 있다.
          (* (parse-long (:id matched-condition-data))
             (:minute matched-condition-data))))))
 
