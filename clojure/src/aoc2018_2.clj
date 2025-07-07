@@ -1,5 +1,34 @@
-(ns aoc2018-2)
+(ns aoc2018-2
+  (:require [clojure.string :as str]))
 
+;; Helper
+(defn- println-data-bypass
+  "출력하고 데이터 반환하는 헬퍼 함수"
+  [data]
+  (do
+    (println data)
+    data))
+
+;; Parsing
+(defn read-file-lines
+  "파일을 읽어 각 줄을 문자열로 하는 리스트(시퀀스)를 반환합니다."
+  [file-path]
+  (->> file-path
+       (slurp)
+       (str/split-lines)))
+
+(defn- character-frequency
+  "문자열에서 문자의 등장빈도를 반환합니다."
+  [characters]
+  (frequencies characters))
+
+(defn part1
+  [file-path]
+  (->> file-path
+       read-file-lines
+       map seq))
+
+(part1 "resources/aoc2018_2.sample.part2.txt")
 ;; 파트 1
 ;; 주어진 각각의 문자열에서, 같은 문자가 두번 혹은 세번씩 나타난다면 각각을 한번씩 센다.
 ;; 두번 나타난 문자가 있는 문자열의 수 * 세번 나타난 문자가 있는 문자열의 수를 반환하시오.
