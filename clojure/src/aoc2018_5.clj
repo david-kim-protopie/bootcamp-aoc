@@ -1,45 +1,16 @@
 (ns aoc2018_5
   (:require [clojure.string :as str]))                      ;; 매크로가 아닌 경우 추천하지 않음 str/aaa -> 까진 wrap 하지 않음
-
-
-;; 디버깅용 함수는 pr 시 제거
-;; Helper
-(defn- println-data-bypass                                  ;; util library
-  "출력하고 데이터 반환하는 헬퍼 함수"
-  [data]
-  (do
-    (println data)
-    data))
-
 ;; Parsing
 ;; 한 번의 호출로 되면 thread macro 사용 지양
 ;; Parsing은 실제 parsing 작업이 있어야함
-(defn parse-input-polymers
-  "파일을 읽어 문자열을 반환합니다.
-  input : file-path
-  output : polymers ( 문자열 )"
-  [file-path]
-  (->> file-path
-       (slurp)))
 
 ;; Processing
-(defn- get-uppercase-char-ascii
-  "unit을 대문자로 변경 후 ascii 코드를 반환합니다."
-  [unit]
-  (->> unit
-      (str/upper-case)
-      (first)
-      (int)))
-
 (defn reaction?
   "두 연속된 유닛(문자)이 서로 반응하여 파괴되는 관계인지 확인합니다.
   input: [unit1 unit2]
   output: boolean"
   [unit1 unit2]
-  (and (some? unit1) (some? unit2)
-       ;; 대소문자 비교 ascii 값 차이 (abs 32)
-       (== (get-uppercase-char-ascii unit1) (get-uppercase-char-ascii unit2)) ; 타입이 같고 (=, (== 차이점 확인하기
-       (not= (int unit1) (int unit2))))                     ;; cC Cc, cc CC
+  (= 32 (abs (- (int unit1) (int unit2)))))
 
 (defn- react-unit-reducer
   "reduce 연산에 사용될 함수. 누산기와 현재 아이템을 받아 다음 반환.
@@ -60,7 +31,6 @@
   [polymers]
   (->> polymers
        (str/lower-case)
-       (seq)                                                ;; string이 이미 seq
        (map str)                                            ;; #() 사용하는 케이스 - 넣는 인자값이 2개 이상일 때 사용, 아니면 그냥 변수만
        (set)))
 
@@ -78,13 +48,6 @@
   (->> polymers
        (reduce react-unit-reducer [])
        (apply str)))
-
-;; Print
-;; 단일 호출같은 경우는 함수 선언하지 말기
-(defn count-polymers-length
-  "최종 폴리머의 길이를 계산하여 반환합니다."
-  [final-polymers]
-  (count final-polymers))
 
 ;; 파트 1
 ;; 입력: dabAaCBAcCcaDA
@@ -104,10 +67,9 @@
   "aop 2018 day5 part1 main 함수"
   [file-path]
   (->> file-path
-       (parse-input-polymers)
+       (slurp)
        (fully-react-polymers)
-       #_(println-data-bypass)                              ;; 평가 가능, 실행결과 영향 x, #_ 중첩가능
-       (count-polymers-length)))
+       (count)))
 
 (comment
   (alchemical-reduction-part1 "resources/aoc2018_5.sample.txt"))
@@ -120,12 +82,12 @@
 (defn alchemical-reduction-part2
   "aop 2018 day5 part2 main 함수"
   [file-path]
-  (let [polymers (parse-input-polymers file-path)
+  (let [polymers (slurp file-path)
         distinct-units (polymers-to-distinct-unit-set polymers)]
     (->> distinct-units
          (map #(remove-character-polymers-case-insensitive polymers %))
          (map fully-react-polymers)
-         (map count-polymers-length)
+         (map count)
          (apply min))))
 
   (comment
