@@ -60,8 +60,7 @@
          (into {}))))
 
 (defn- sum-of-distances
-  "격자점에서 가장 가까운 원본 좌표의 ID를 찾습니다.
-  거리가 같은 좌표가 둘 이상이면 nil을 반환합니다."
+  "격자점에서 모든 좌표와의 거리의 합을 반환합니다."
   [grid-point coords]
   (let [distances (map #(vector (:id %) (manhattan-distance grid-point %)) coords)]
     (->> distances
