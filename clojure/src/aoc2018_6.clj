@@ -10,7 +10,7 @@
 ;; --- 데이터 구조 정의 ---
 (defrecord Coordinate [id x y])
 
-;; --- 1. Parse (파싱) ---
+;; --- Parsing ---
 (defn parse-coordinates-from-file
   "파일을 읽어 각 줄의 좌표를 Coordinate 레코드의 리스트로 변환합니다.
   각 좌표에는 1부터 시작하는 고유 ID(문제 상에선 A, B, C, D, E, F)가 부여됩니다."
@@ -21,7 +21,7 @@
                       (let [[x y] (mapv parse-long (str/split line #", "))]
                         (->Coordinate idx x y))))))
 
-;; --- 2. Process (처리) ---
+;; --- Process ---
 (defn- manhattan-distance
   "두 점(p1, p2) 사이의 맨해튼 거리를 계산합니다."
   [[px py] coordinate]
@@ -68,9 +68,9 @@
          (apply +))))
 
 
-;; --- 3. Solve (문제 풀이) ---
+;; --- Aggregate ---
 (defn identify-infinite-ids
-  "격자의 가장자리에 닿아있는 영역들의 ID 셋을 반환합니다."
+  "격자의 가장자리에 닿아있는 영역들의 ID 셋을 반환합ㅇ니다."
   [area-map {:keys [min-x max-x min-y max-y]}]
   (let [boundary-points (concat
                           (for [x (range min-x (inc max-x))] [[x min-y] [x max-y]])
