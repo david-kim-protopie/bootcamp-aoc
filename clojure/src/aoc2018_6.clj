@@ -69,8 +69,8 @@
 
 
 ;; --- Aggregate ---
-(defn identify-infinite-ids
-  "격자의 가장자리에 닿아있는 영역들의 ID 셋을 반환합ㅇ니다."
+(defn unique-infinite-ids
+  "격자의 가장자리에 닿아있는 영역들의 ID 셋을 반환합니다."
   [area-map {:keys [min-x max-x min-y max-y]}]
   (let [boundary-points (concat
                           (for [x (range min-x (inc max-x))] [[x min-y] [x max-y]])
@@ -140,7 +140,7 @@
   (let [coords (parse-coordinates-from-file file-path)
         area-map (calculate-all-areas find-closest-coordinate-id coords)
         bounds (find-grid-bounds coords)
-        infinite-ids (identify-infinite-ids area-map bounds)]
+        infinite-ids (unique-infinite-ids area-map bounds)]
     (solve-part1 area-map infinite-ids)))
 
 (comment
