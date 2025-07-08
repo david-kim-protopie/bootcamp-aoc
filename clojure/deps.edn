@@ -1,3 +1,5 @@
 {:paths
  ["src", "resources"]
- :deps {}}
+ :deps {
+        djblue/portal {:mvn/version "0.59.1"}}}
+
