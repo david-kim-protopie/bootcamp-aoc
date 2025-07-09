@@ -63,6 +63,8 @@
 ;; [x y & more ] => 가변인자 함수 apply 쓰는게 자연스러움
 ;; (+ 1 2)
 
+;; 처음엔 샘플 인풋을 선언해서 컨텐츠 넘기기
+;; 파일 읽기는 다 하고나서
 (defn alchemical-reduction-part1
   "aop 2018 day5 part1 main 함수"
   [file-path]
