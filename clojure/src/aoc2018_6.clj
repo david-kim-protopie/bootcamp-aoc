@@ -182,8 +182,8 @@
 (defn fill-calculate-result-map
   "경계의 한계룰 아용해 지도를 생성하고,
   맨해탄 거리를 이용해서 지도의 위치에서 가장 가까운 coordinate의 id를 채운 지도를 반환한다..
-  input: [limited-boundary coordinates-map]
-  output: area-map(vector)"
+  input: [calculator limited-boundary coordinates-map]
+  output: 좌표별 calculatord로 계산된 값 [[좌표] calculator에 의해서 계산된 값 ...]"
   [calculator limited-boundary coordinate-objects-map]
   (for [x (range (:min-x limited-boundary) (inc (:max-x limited-boundary))) ;; range의 end는 그 수 -1까지만 지정되서 inc 해줌
         y (range (:min-y limited-boundary) (inc (:max-y limited-boundary)))]
@@ -201,13 +201,13 @@
   (->> area-map
        (map second)                                         ;; 각 위치의 [좌표 closest-id] id만 추출
        (frequencies)                                        ;; 각 id 마다 빈도수 보기
-       (vec)
+       (vec)                                                ;; map{}이라 필터 연산을 위해서? vector로 변환
        ;; frequencies 의 반환 타입이 {} 맵 형태라 filter가 동작하지 않는 것 같음
        ;;(filter (fn [key _] (not= key nil)))               ;; 키가 nil이 아닌 것만 필터링 ;;Wrong number of args (1) passed to
        (filter #(not (nil? (first %))))                     ;; 동일한 결과 (remove #(nil? (first %)))
-       (filter #(not (infinite-ids (first %))))
-       (apply max-key second)
-       (second))))
+       (filter #(not (infinite-ids (first %))))             ;; 무한하게 확장하는 id 제거
+       (apply max-key second)                               ;; [id 빈도]에서 빈도 기준 max-key인 값을 추출하기 위한 apply
+       (second))))                                          ;; 빈도값만 추출
 
 (defn chronal-coordinates-part1
   [lines]
@@ -259,3 +259,5 @@
 
 (comment
   (chronal-coordinates-part2 sample-input))
+
+;; Q1. apply max/min 할 때 안정성을 위해 초기값 0을 넣으라고 실제로도 그렇게 많이 사용하는지
