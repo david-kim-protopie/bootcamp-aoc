@@ -123,11 +123,11 @@
   (let [{:keys [min-x max-x min-y max-y]} limited-boundary
         ;; list인 상태에서 비교하려 했으나 O(n)이라서 map으로 변경 시도
         ;; (info {})를 thread macro 마지막에 넣어봤지만 'info cannot be resolved' 노출
+        range-x (range min-x (inc max-x))
+        range-y (range min-y (inc max-y))
         boundary-coordinates (->> (concat
-                                    (for [x (range min-x (inc max-x))]
-                                      [[x min-y] [x max-y]])
-                                    (for [y (range min-y (inc max-y))]
-                                      [[min-x y] [max-x y]]))
+                                    (mapcat (fn [x] [[x min-y] [x max-y]]) range-x) ;;(mapcat #( [[% min-y] [% max-y]] ) range-x) 에러 Execution error (ArityException)
+                                    (mapcat (fn [y] [[min-x y] [max-x y]]) range-y))
                                   (apply concat)
                                   (distinct)
                                   (into #{}))]
