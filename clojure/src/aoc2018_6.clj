@@ -193,7 +193,7 @@
   [calculator limited-boundary coordinate-objects-map]
   (for [x (range (:min-x limited-boundary) (inc (:max-x limited-boundary))) ;; range의 end는 그 수 -1까지만 지정되서 inc 해줌
         y (range (:min-y limited-boundary) (inc (:max-y limited-boundary)))]
-    [[x y] (calculator [x y] coordinate-objects-map)]))
+    {:coordinate [x y] :value (calculator [x y] coordinate-objects-map)}))
 
 ;; == Aggregate ==
 (defn solve-part1
@@ -256,7 +256,7 @@
         area-map (fill-calculate-result-map sum-of-distance limited-boundary coordinate-objects-map)]
     (->> area-map
          (filter (fn [coordinate-with-sum-of-distance]
-                   (> less-than (second coordinate-with-sum-of-distance))))
+                   (> less-than (:value coordinate-with-sum-of-distance))))
          (count))))
 
 (defn chronal-coordinates-part2
