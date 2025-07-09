@@ -60,13 +60,6 @@
 5, 5
 8, 9"))
 
-(defn- println-data-bypass
-  "출력하고 데이터 반환하는 헬퍼 함수"
-  [data]
-  (do
-    (println data)
-    data))
-
 ;; == Parsing ==
 (defn- parse-coordinate-object
   "[idx x y]로 구성된 data-vector를 {:id :x :y}로 변환해서 반환한다."
@@ -141,7 +134,7 @@
     ;; thread-macro를 사용해 area-map와 boundary-coordinates를 이용해서 경계에 있는 좌표들을 추출하고 싶었으나
     ;; 어렵다는 판단이 들어서 let-binding 혼용하도록 수정함
     (->> area-map
-         (filter (fn [area] (contains? boundary-coordinates (first area))))
+         (filter (fn [area] (boundary-coordinates (first area))))
          (map second)
          (filter #(not (nil? %)))
          (set))))
@@ -212,7 +205,7 @@
        ;; frequencies 의 반환 타입이 {} 맵 형태라 filter가 동작하지 않는 것 같음
        ;;(filter (fn [key _] (not= key nil)))               ;; 키가 nil이 아닌 것만 필터링 ;;Wrong number of args (1) passed to
        (filter #(not (nil? (first %))))                     ;; 동일한 결과 (remove #(nil? (first %)))
-       (filter #(not (contains? infinite-ids (first %))))
+       (filter #(not (infinite-ids (first %))))
        (apply max-key second)
        (second))))
 
@@ -220,7 +213,9 @@
   [lines]
   (solve-part1 lines))
 
-(chronal-coordinates-part1 sample-input)
+(comment
+  (chronal-coordinates-part1 sample-input))
+
 ;; 파트 2
 ;; 안전(safe) 한 지역은 근원지'들'로부터의 맨하탄거리(Manhattan distance, 격자를 상하좌우로만 움직일때의 최단 거리)의 '합'이 N 미만인 지역임.
 
@@ -246,7 +241,8 @@
 ;; N이 10000 미만인 안전한 지역의 사이즈를 구하시오.
 
 (defn solve-part2
-  "유한인 영역중에서 가장 큰 영역의 크기를 반환한다."
+  "각 칸에서 입력된 좌표까지의 맨해탄 거리의 합이 주어진 값(less-than)보다 작은 칸은 안전영역이라 한다.
+  이 안전영역의 수를 구해서 반환한다."
   [less-than lines]
   (let [coordinates (map #(str/split % #", ") lines)
         coordinate-objects-map (parse-coordinate-object-maps coordinates)
@@ -261,4 +257,5 @@
   [lines]
   (solve-part2 32 lines))
 
-(chronal-coordinates-part2 sample-input)
+(comment
+  (chronal-coordinates-part2 sample-input))
