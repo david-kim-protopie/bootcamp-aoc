@@ -72,12 +72,14 @@
 (defn parse-coordinate-object-maps
   "좌표 맵을 반환한다."
   [coordinates]
-  (->> coordinates                          ;;; ", "로 split 하기
-       ;;; ([1 1] [1 6] [8 3] [3 4] [5 5] [8 9])
-       ;;; map-indexed에서 ["1, 1", "1, 6"] -> [[0 1 1] [1 1 6]] 이런식으로 파싱하고 싶었음
-       ;;; (map-indexed (fn [_ item] (let [[x y] item] ([x y])))) 디스럭처링에 대한 이해가 낮아 이런 접근방법 시도
-       (map-indexed (fn [idx [x y]] [idx (parse-long x) (parse-long y)]))             ;;; parse-long을 이 곳에서 했으나, parse-coordinate로 옮김
-       (map parse-coordinate-object)))                             ;;; 함수 인자로 바로 디스트럭처링이 바로되는게 안되는걸까
+  (let [indexed-parse-func (fn [idx [x y]] [idx (parse-long x) (parse-long y)])]
+    (->> coordinates                          ;;; ", "로 split 하기
+         ;;; ([1 1] [1 6] [8 3] [3 4] [5 5] [8 9])
+         ;;; map-indexed에서 ["1, 1", "1, 6"] -> [[0 1 1] [1 1 6]] 이런식으로 파싱하고 싶었음
+         ;;; (map-indexed (fn [_ item] (let [[x y] item] ([x y])))) 디스럭처링에 대한 이해가 낮아 이런 접근방법 시도
+         (map-indexed indexed-parse-func)             ;;; parse-long을 이 곳에서 했으나, parse-coordinate로 옮김
+         (map parse-coordinate-object))))                             ;;; 함수 인자로 바로 디스트럭처링이 바로되는게 안되는걸까)
+
 
 (defn parse-limited-boundary
   "입력받은 좌표를 사용해서 한계가 있는 경계를 반환합니다."
