@@ -134,24 +134,30 @@
     ;; thread-macro를 사용해 area-map와 boundary-coordinates를 이용해서 경계에 있는 좌표들을 추출하고 싶었으나
     ;; 어렵다는 판단이 들어서 let-binding 혼용하도록 수정함
     (->> area-map
-         (filter (fn [area] (boundary-coordinates (first area))))
+         (filter #(boundary-coordinates (first %)))
          (map second)
-         (filter #(not (nil? %)))
+         (filter some?)
          (set))))
 
 ;; == Processing ==
+;; M * (NLogN)
+;; 정렬 문제는 크게 발생하지 않을 수 있음
+;; 선형탐색 하는 경우 break 하는 경우가 있음 => loop / query에서 대부분 처리됨
 (defn find-closest-coordinate-id
   "위치에서 가장 가까운 좌표의 :id를 반환한다.
   동일한 거리의 id가 있는 경우 nil"
   ;;(map #([(manhattan-distance [x y] [(:x %) (:y %)]) :id %])) ;; [맨해탄거리 :id] 이렇게 뽑고 싶음
   ;;(apply min-key second)                               ;; 동일한 값이 있을 경우 먼저 발견된 값을 사용해서 apply min-key는 사용하기 어려움
   [[x y] coordinate-objects-map]
-  (let [distance-with-ids (map #(manhattan-distance-with-id [x y] %) coordinate-objects-map)
-        sorted-by-distance-list (sort-by second distance-with-ids)
+  (let [distance-with-ids (map #(manhattan-distance-with-id [x y] %) coordinate-objects-map) ;; M
+        sorted-by-distance-list (sort-by second distance-with-ids) ;; O(N * logN)
         [[id1 dist1] [_ dist2]] sorted-by-distance-list]
     (when (not= dist1 dist2)
       id1)))
 
+;; 최적화
+;; 매개변수로 기준을 입력받고 중간에 탈출
+;; 합을 구하는 것 보다는 판단을 저장한다?
 (defn sum-of-distance
   "현재 위치에서 입력받은 좌표까지의 거리의 합을 반환한다."
   [[x y] coordinate-objects-map]
