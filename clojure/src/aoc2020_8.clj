@@ -106,6 +106,26 @@ acc +6"))
                (:current-index execute-result)
                (conj visit current-index))))))
 
+(defn check-correct-instructions
+  "무한 루프가 발생하는지 확인한다.
+  input : instructions
+  output : 성공 시 acc, 실패시 nil"
+  [instructions]
+  (let [length (count instructions)]
+    (loop [acc 0
+           current-index 0
+           visit #{}]
+      (if (visit current-index)
+        nil
+        (if (<= length current-index)
+          acc
+          (let [execute-result (->> (nth instructions current-index)
+                                    (execute-instruction acc current-index))]
+            (recur (:acc execute-result)
+                   (:current-index execute-result)
+                   (conj visit current-index))))))))
+
+
 (defn solve-part1
   "입력된 지침 문자열 리스트를 가지고 명령이 2번 실행될 때 누산기의 값을 반환한다."
   [input]
@@ -118,7 +138,82 @@ acc +6"))
   [input]
   (solve-part1 input))
 
-#_(handheld-halting-part1 sample-input)
-(handheld-halting-part1
-  (->> (slurp "resources/aoc2020_8.sample.txt")
-       (str/split-lines)))
+(comment
+  #_(handheld-halting-part1 sample-input)
+  (handheld-halting-part1
+    (->> (slurp "resources/aoc2020_8.sample.txt")
+         (str/split-lines))))
+
+
+;; 구상
+;; 순차적으로 탐색하는데 nop나 jmp가 나오면 그걸 바꾼 뒤 part1의 로직과 비슷하게 태우는데 loop가
+;; 끝까지 돌았을 경우 acc 반환 아닌경우 nil 반환
+;; 끝까지 가는 케이스 판단 => current-index로 비교하기
+;; 겉의 loop는 반환값이 some? 으로 판단하기
+
+(defn- switch-operation
+  "nop -> jmp로 jmp -> nop로 변경해서 반환한다."
+  [operation]
+  (if (= operation "nop")
+    "jmp"
+    "nop"))
+
+;; java/kotlin의 indexOf 같은 함수가 표준 라이브러리내 없는 것 같아서
+;; AI의 도움을 받음
+(defn- index-of
+  "시퀸스에서 값에 해당하는 인덱스를 반환한다."
+  ([collection element-set]
+   (index-of collection element-set 0))
+  ([collection element-set start-index]
+   (first
+     (keep-indexed
+       (fn [index item]
+         (when (and (<= start-index index)
+                    (element-set (:operation item)))
+           index))
+       collection))))
+
+(defn switch-operation-and-execute-result
+  "operation을 변경하고 실행한 결과값과 탐색한 인덱스를 반환합니다."
+  [start-index instructions]
+  (let [target-operations #{"nop" "jmp"}
+        search-index (index-of instructions target-operations start-index) ;; search-index (index-of instructions target-operations start-index) ;; npe 발생
+        searched-instruction (nth instructions search-index)
+        switched-operation (switch-operation (:operation searched-instruction))
+        switched-instructions (assoc (vec instructions) search-index {:operation switched-operation ;; list 형태라 assoc이 안되었는데 그래서 vector로 래핑
+                                                                :argument (:argument searched-instruction)})
+        result (check-correct-instructions switched-instructions)
+        ]
+    (if (some? result)
+      {:correct? true
+       :value    result}
+      {:correct? false
+       :value    (inc search-index)})))
+
+;; == Aggregate ==
+(defn process-instructions
+  "순차적으로 지침들을 탐색하며 nop, jmp 변경하고 그 결과를 확인해 반환한다."
+  [instructions]
+  (loop [search-index 0]
+    (let [result (switch-operation-and-execute-result search-index instructions)]
+      (if (:correct? result)
+        (:value result)
+        (recur (:value result))))))
+
+
+(defn solve-part2
+  "nop -> jmp 혹은 jmp -> nop 변경해 infinite loop을 탈출할 때 acc의 값 반환하기"
+  [input]
+  (->> input
+       (map parse-line-to-instruction)
+       (process-instructions)))
+
+(defn handheld-halting-part2
+  [input]
+  (solve-part2 input))
+
+(comment
+  #_(handheld-halting-part2 sample-input)
+  (handheld-halting-part2
+    (->> (slurp "resources/aoc2020_8.sample.txt")
+         (str/split-lines))))
