@@ -34,7 +34,7 @@ acc +6"))
 
 (defn- nop
   "명령 nop 에 대한 처리"
-  [acc current-index argument]
+  [acc current-index _]                                     ;; Q.함수에서도 규격 맞추기 위한 매개변수 사용하지 않으면 _로 사용해도 되는지?
   ;; Do nothing
   {:acc acc
    :current-index (inc current-index)})
@@ -51,7 +51,7 @@ acc +6"))
   {:acc (+ acc argument)
    :current-index (inc current-index)})
 
-(def operation-enum
+(def operations
   {:operation/nop nop
    :operation/jmp jmp
    :operation/acc acc})
@@ -65,7 +65,7 @@ acc +6"))
     {:operation operation
      :argument (parse-long argument)}))
 
-(defn- parse-operation-to-enum-keyword
+(defn- str->operation-keyword
   "오퍼레이션을 keyword 함수를 이용해 동적으로 :operation/~ 같은 키워드로 만들어 반환한다.
   input: operation(string)
   output: keyword
@@ -86,14 +86,14 @@ acc +6"))
                       :argument argument}
   output: "
   [acc current-index instruction]
-  (let [operation-keyword (parse-operation-to-enum-keyword (:operation instruction))
+  (let [operation-keyword (str->operation-keyword (:operation instruction))
         argument (:argument instruction)
-        operation-action (operation-keyword operation-enum)]
+        operation-action (operation-keyword operations)]
     (operation-action acc current-index argument)))
 
 ;; Q.loop는 let-binding에 넣고 thread-macro 호출하는게 나은지 아니면 함수블럭에 넣는게 나은지
-(defn find-twice-appear-index
-  "두 번째 등장하는 지침의 index를 찾는다."
+(defn find-acc-on-revisit
+  "재방문하는 index가 있는경우 누산기를 반환한다."
   [instructions]
   (loop [acc 0
          current-index 0
@@ -115,15 +115,29 @@ acc +6"))
     (loop [acc 0
            current-index 0
            visit #{}]
-      (if (visit current-index)
-        nil
-        (if (<= length current-index)
-          acc
-          (let [execute-result (->> (nth instructions current-index)
-                                    (execute-instruction acc current-index))]
-            (recur (:acc execute-result)
-                   (:current-index execute-result)
-                   (conj visit current-index))))))))
+      ;; AI 스타일링 피드백
+      ;; (cond
+      ;;   (visit current-index) nil
+      ;;   (<= length current-index) acc
+      ;;   :else (let [...] (recur ...)))
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ; (if (visit current-index)
+      ;        nil
+      ;        (if (<= length current-index)
+      ;          acc
+      ;          (let [execute-result (->> (nth instructions current-index)
+      ;                                    (execute-instruction acc current-index))]
+      ;            (recur (:acc execute-result)
+      ;                   (:current-index execute-result)
+      ;                   (conj visit current-index)))))
+      (cond
+        (visit current-index) nil
+        (<= length current-index) acc
+        :else (let [execute-result (->> (nth instructions current-index)
+                                        (execute-instruction acc current-index))]
+                (recur (:acc execute-result)
+                       (:current-index execute-result)
+                       (conj visit current-index)))))))
 
 
 (defn solve-part1
@@ -131,7 +145,7 @@ acc +6"))
   [input]
   (->> input
        (map parse-line-to-instruction)
-       (find-twice-appear-index)
+       (find-acc-on-revisit)
        (println-data-bypass)))
 
 (defn handheld-halting-part1
@@ -173,17 +187,17 @@ acc +6"))
            index))
        collection))))
 
-(defn switch-operation-and-execute-result
+(defn attempt-fix-and-run
   "operation을 변경하고 실행한 결과값과 탐색한 인덱스를 반환합니다."
   [start-index instructions]
   (let [target-operations #{"nop" "jmp"}
         search-index (index-of instructions target-operations start-index) ;; search-index (index-of instructions target-operations start-index) ;; npe 발생
         searched-instruction (nth instructions search-index)
         switched-operation (switch-operation (:operation searched-instruction))
-        switched-instructions (assoc (vec instructions) search-index {:operation switched-operation ;; list 형태라 assoc이 안되었는데 그래서 vector로 래핑
-                                                                :argument (:argument searched-instruction)})
-        result (check-correct-instructions switched-instructions)
-        ]
+        ;; list 형태라 assoc이 안되었는데 그래서 vector로 래핑
+        switched-instructions (assoc (vec instructions) search-index {:operation switched-operation
+                                                                      :argument (:argument searched-instruction)})
+        result (check-correct-instructions switched-instructions)]
     (if (some? result)
       {:correct? true
        :value    result}
@@ -195,7 +209,7 @@ acc +6"))
   "순차적으로 지침들을 탐색하며 nop, jmp 변경하고 그 결과를 확인해 반환한다."
   [instructions]
   (loop [search-index 0]
-    (let [result (switch-operation-and-execute-result search-index instructions)]
+    (let [result (attempt-fix-and-run search-index instructions)]
       (if (:correct? result)
         (:value result)
         (recur (:value result))))))
