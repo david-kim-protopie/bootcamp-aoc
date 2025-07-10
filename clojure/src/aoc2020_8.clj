@@ -34,6 +34,7 @@ acc +6"))
 
 (defn- nop
   "명령 nop 에 대한 처리"
+  ;; 맵으로 받고 :keys [] 로 처리하는게 더 좋음
   [acc current-index _]                                     ;; Q.함수에서도 규격 맞추기 위한 매개변수 사용하지 않으면 _로 사용해도 되는지?
   ;; Do nothing
   {:acc acc
@@ -46,7 +47,7 @@ acc +6"))
    :current-index (+ current-index argument)})
 
 (defn- acc
-  "명령 nop 에 대한 처리"
+  "명령 acc 에 대한 처리"
   [acc current-index argument]
   {:acc (+ acc argument)
    :current-index (inc current-index)})
@@ -78,6 +79,7 @@ acc +6"))
 ;; clojure 에서는 별도로 지원되는게 없어보임
 ;; 맵과 private 함수를 사용하는 방식으로 시도
 ;; Q. 이런 경우 어떻게 처리하는게 일반적인지
+;; 코드 분석에 어려움을 겪을 수 있다. 한 눈에 안읽힘(가독성) ~_fn 으로 함수라는걸 인지하게
 (defn execute-instruction
   "지침을 실행한다
   input: acc / 누산기
@@ -92,6 +94,7 @@ acc +6"))
     (operation-action acc current-index argument)))
 
 ;; Q.loop는 let-binding에 넣고 thread-macro 호출하는게 나은지 아니면 함수블럭에 넣는게 나은지
+;; let-binding 은 함수로 빼기 애매하거나 싫은 경우? 지양하자. 남용하지 말자, defn 으로 추출
 (defn find-acc-on-revisit
   "재방문하는 index가 있는경우 누산기를 반환한다."
   [instructions]
@@ -105,7 +108,7 @@ acc +6"))
         (recur (:acc execute-result)
                (:current-index execute-result)
                (conj visit current-index))))))
-
+;; 커링 partial 찾아보기 / cloud에 많음
 (defn check-correct-instructions
   "무한 루프가 발생하는지 확인한다.
   input : instructions
@@ -195,6 +198,14 @@ acc +6"))
         searched-instruction (nth instructions search-index)
         switched-operation (switch-operation (:operation searched-instruction))
         ;; list 형태라 assoc이 안되었는데 그래서 vector로 래핑
+        ;; array성 데이터 조작 -> map 으로 만들기 :id id, :value
+        ;; assoc는 map 변경할떄만 쓴다.
+        ;; indexOf 함수형에서 사용할일이 없음
+        ;; map, filter, 등은 lazy 하게 동작한다 필요한 만큼만 로딩해서
+        ;; take 5 [1 .... 100000] => 우선 일정부분만 로딩해서 작업한다.
+        ;; lazy 로딩을 피하기 위해선 (do ~)
+        ;; reduce <-> loop loop 자유도가수 높아서 상위 호환적 loop 재귀함수로 구현할 있음
+        ;; LazySeq~~~ lazy 로딩 조사해보기
         switched-instructions (assoc (vec instructions) search-index {:operation switched-operation
                                                                       :argument (:argument searched-instruction)})
         result (check-correct-instructions switched-instructions)]
@@ -208,12 +219,14 @@ acc +6"))
 (defn process-instructions
   "순차적으로 지침들을 탐색하며 nop, jmp 변경하고 그 결과를 확인해 반환한다."
   [instructions]
+  ;; loop을 이용한 탐색보다는 미리 nop, jmp 인 경우 인덱스를 추출하고
+  ;; 그 값을 넘겨서 loop를 처리한다.
   (loop [search-index 0]
-    (let [result (attempt-fix-and-run search-index instructions)]
-      (if (:correct? result)
-        (:value result)
-        (recur (:value result))))))
-
+    ;; keys를 이용한 디스트럭처링, ? => boolean, ! => 위험성이 있는 코드
+    (let [{:keys [correct? value]} (attempt-fix-and-run search-index instructions)]
+      (if correct?
+        value
+        (recur value)))))
 
 (defn solve-part2
   "nop -> jmp 혹은 jmp -> nop 변경해 infinite loop을 탈출할 때 acc의 값 반환하기"
