@@ -89,11 +89,10 @@ Step F must be finished before step E can begin."))
   [graph]
   (->> graph
        (vals)
-       (filter #(= 0 (count (:parents %))))
+       (filter #(empty? (:parents %)))
        (map :id)
        (sort)
-       (reverse)
-       (vec)))
+       (reverse)))
 
 ;; 루트거나 부모가 모두 방문되었다면, path에 방문기록
 ;; 아니라면 자식들 오름차순 정렬 후 재귀호출 -> 이 부분이 잘 안풀림
@@ -120,8 +119,7 @@ Step F must be finished before step E can begin."))
         (recur (-> (pop stack)
                    (concat children)
                    (sort)
-                   (reverse)
-                   (vec))
+                   (reverse))
                (if visitable?
                  (conj path-to-goal (:id current-node))
                  path-to-goal))))))
