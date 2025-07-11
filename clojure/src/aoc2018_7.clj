@@ -93,8 +93,7 @@ Step F must be finished before step E can begin."))
        (map :id)
        (sort)
        (reverse)
-       (vec))
-  )
+       (vec)))
 
 ;; 루트거나 부모가 모두 방문되었다면, path에 방문기록
 ;; 아니라면 자식들 오름차순 정렬 후 재귀호출 -> 이 부분이 잘 안풀림
@@ -127,17 +126,6 @@ Step F must be finished before step E can begin."))
                  (conj path-to-goal (:id current-node))
                  path-to-goal))))))
 
-(comment
-  (def data [1 2])
-
-  (loop [acc 0
-         data [1]]
-    (if (<= 12 acc)
-      data
-      (recur (+ acc (last data))
-             (conj data 1))))
-  )
-
 ;; == Aggregate ==
 (defn solve-part1
   "깊이 우선 탐색을 통해서 경로를 탐색한다."
@@ -154,7 +142,7 @@ Step F must be finished before step E can begin."))
   [lines]
   (solve-part1 lines))
 
-#_(sum-of-its-part1 sample-input)
-
-(sum-of-its-part1 (->> (slurp "resources/aoc2018_7.sample.txt")
-                       (str/split-lines)))
+(comment
+  #_(sum-of-its-part1 sample-input)
+  (sum-of-its-part1 (->> (slurp "resources/aoc2018_7.sample.txt")
+                         (str/split-lines))))
