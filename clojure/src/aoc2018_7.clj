@@ -112,7 +112,7 @@ Step F must be finished before step E can begin."))
       (let [current-node (get graph (peek stack))
             parents (:parents current-node)
             children (vec (:children current-node))
-            set-path-to-goal (set path-to-goal)
+            set-path-to-goal (set path-to-goal)             ;; set 으로 빠른 포함여부 확인하기 위함
             visitable? (and (or (empty? parents)
                                 (every? set-path-to-goal parents))
                             (not (set-path-to-goal (:id current-node))))]
