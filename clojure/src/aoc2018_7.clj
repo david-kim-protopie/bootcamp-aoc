@@ -61,25 +61,33 @@ Step F must be finished before step E can begin."))
   (let [{:keys [source destination]} instruction
         downwards-node (generate-downwards-node source destination)
         upwards-node (generate-upwards-node source destination)]
+    ;; 변수' => 재활용 컨벤션
+    ;; if else if else 2번 정도 나열은 cond thread macro
+    ;; if else block을 let-binding 해서 매개변수만 받아서 처리
+    ;; fn으로 묶는 방법
+    ;; 가독성 고려해보기 1/2 페어 3/4 페어
     (cond-> graph
+            ;;1
       (graph source)
       (update-in [source :children] conj destination)
-
+            ;;2
       (not (graph source))
       (assoc source downwards-node)
 
+            ;;3
       (graph destination)
       (update-in [destination :parents] conj source)
-
+            ;;4
       (not (graph destination))
       (assoc destination upwards-node)
       )))
 
+;; previous step, next step 문제의 나오는 단어를 사용
 (defn reduce-to-graph
   "파싱된 지침을 이용해서 노드간 양방향(parents<->children)으로 알고 있는 그래프를 반환한다.
   input: instruction  {:source source
                        :destination destination}
-  output: graph {A {:id A :parents [] :children []}}"
+  output: graph {A {:id A :parents [] :children []} ...}"
   [instructions]
   (reduce connect-two-nodes {} instructions))
 
@@ -102,6 +110,11 @@ Step F must be finished before step E can begin."))
 ;; 앞서 끝난 결과의 영향을 받으면 안좋음
 ;; 결과를 계속 넘겨서 누산기처럼 사용
 ;; 앞 결과를 기다려야하기때문에 좋은 로직은 아님
+;; 벡터(arraylist)와 리스트(linked list)
+;; 스택일 필요는 없음, 어차피 정렬이 들어가기 떄문에
+;; 우선순위 큐 표준 라이브러리 안됨
+;; dfs가 아니라 위상정렬 //
+;; 액션 후 다시
 (defn dfs
   "그래프의 노드를 깊이 우선 탐색한다."
   [graph root-ids]
@@ -109,20 +122,33 @@ Step F must be finished before step E can begin."))
          path-to-goal []]
     (if (empty? stack)
       path-to-goal
+      ;; let-binding 부분 함수 분리
       (let [current-node (get graph (peek stack))
             parents (:parents current-node)
-            children (vec (:children current-node))
-            set-path-to-goal (set path-to-goal)             ;; set 으로 빠른 포함여부 확인하기 위함
+            children (vec (:children current-node))         ;; vec 필요없다 sequence 끼리는 잘 붙음
+            ;; 자료형 뒤에
+            path-to-goal-set (set path-to-goal)             ;; set 으로 빠른 포함여부 확인하기 위함
+            ;; 중첩보다는 내부를 let-binding으로 분해해서 조건을 하나로 보이게
+            ;; visitable? (and (or (empty? parents)
+            ;                                (every? path-to-goal-set parents))
+            ;                            (not (path-to-goal-set (:id current-node)))
+            ;; 최적화 고민
             visitable? (and (or (empty? parents)
-                                (every? set-path-to-goal parents))
-                            (not (set-path-to-goal (:id current-node))))]
+                                (every? path-to-goal-set parents))
+                            (not (path-to-goal-set (:id current-node))))]
         (recur (-> (pop stack)
                    (concat children)
                    (sort)
-                   (reverse))
+                   (reverse)
+                   )
                (if visitable?
                  (conj path-to-goal (:id current-node))
                  path-to-goal))))))
+(comment
+  (concat [2 3 4] '(1 2 3))
+  (sort [3 2 1])
+  (peek '(3 2 1))
+  (peek [3 2 1]))
 
 ;; == Aggregate ==
 (defn solve-part1
@@ -144,3 +170,8 @@ Step F must be finished before step E can begin."))
   #_(sum-of-its-part1 sample-input)
   (sum-of-its-part1 (->> (slurp "resources/aoc2018_7.sample.txt")
                          (str/split-lines))))
+
+;; lazy seq iterate 사용해보면 좋다.
+;; loop <-> iterate
+;; iterate는 종료 조건을 줘야함
+;; 함수를 많이 쪼개기 / 시뮬레이션
