@@ -43,70 +43,80 @@ Step F must be finished before step E can begin."))
 
 (defn- generate-downwards-node
   [source destination]
-  {:id source
-   :parents []
-   :children [destination]})
+  {:id           source
+   :before-steps #{}
+   :next-steps   #{destination}})
 
 (defn- generate-upwards-node
   [source destination]
-  {:id destination
-   :parents [source]
-   :children []})
+  {:id           destination
+   :before-steps #{source}
+   :next-steps   #{}})
 
 ;; Q.if 문 2개를 한 함수에서 실행하기 위한 방법
 ;; cond-> 사용해서 파이프라인 구성
-(defn connect-two-nodes
+;; 변수' => 재활용 컨벤션 v
+;; if else if else 2번 정도 나열은 cond thread macro 사용안하는게 좋음 v
+;; if else block을 let-binding 해서 매개변수만 받아서 처리 v
+;; fn으로 묶는 방법 v
+;; 가독성 고려해보기 1/2 페어 3/4 페어 v
+(defn connect-two-steps
   "두 노드를 연결하는 reduce 핸들러"
-  [graph instruction]
+  [graph' instruction]
   (let [{:keys [source destination]} instruction
         downwards-node (generate-downwards-node source destination)
-        upwards-node (generate-upwards-node source destination)]
-    ;; 변수' => 재활용 컨벤션
-    ;; if else if else 2번 정도 나열은 cond thread macro
-    ;; if else block을 let-binding 해서 매개변수만 받아서 처리
-    ;; fn으로 묶는 방법
-    ;; 가독성 고려해보기 1/2 페어 3/4 페어
-    (cond-> graph
-            ;;1
-      (graph source)
-      (update-in [source :children] conj destination)
-            ;;2
-      (not (graph source))
-      (assoc source downwards-node)
-
-            ;;3
-      (graph destination)
-      (update-in [destination :parents] conj source)
-            ;;4
-      (not (graph destination))
-      (assoc destination upwards-node)
-      )))
+        upwards-node (generate-upwards-node source destination)
+        assoc-graph-with-condition (fn [graph
+                                      target-id
+                                      connected-id
+                                      key
+                                      apply-node]
+                                   (if (graph target-id)
+                                     (update-in graph [target-id key] conj connected-id)
+                                     (assoc graph target-id apply-node)))]
+    (-> graph'
+        (assoc-graph-with-condition source
+                                  destination
+                                  :next-steps
+                                  downwards-node)
+        
+        (assoc-graph-with-condition destination
+                                  source
+                                  :before-steps
+                                  upwards-node))))
 
 ;; previous step, next step 문제의 나오는 단어를 사용
 (defn reduce-to-graph
-  "파싱된 지침을 이용해서 노드간 양방향(parents<->children)으로 알고 있는 그래프를 반환한다.
+  "순환하지 않는 graph(Directed Acyclic Graph)로 지침들을 입력받아서 변환한다.
   input: instruction  {:source source
                        :destination destination}
-  output: graph {A {:id A :parents [] :children []} ...}"
+  output: graph {A {:id A ::before-steps [] ::next-steps []} ...}"
   [instructions]
-  (reduce connect-two-nodes {} instructions))
+  (reduce connect-two-steps {} instructions))
 
 ;; == Process ==
-(defn find-root-ids
-  "그래프에서 부모가 없는 root 노드의 id 목록을 찾는다."
+(defn find-empty-or-finished-before-step-ids
+  "이전단계가 완료된 단계의 id목록을 찾는다."
   [graph]
   (->> graph
        (vals)
-       (filter #(empty? (:parents %)))
+       (filter #(empty? (:before-steps %)))
        (map :id)
-       (sort)
-       (reverse)))
+       (sort)))
+
+(defn remove-step-in-graph
+  "graph 에서 step을 제거한다."
+  [target-id graph]
+  (let [remove-id-in-before-steps_fn (fn [[step-id step-info]]
+                                       [step-id (update step-info :before-steps disj target-id)])]
+    (->> (dissoc graph target-id)
+         (map remove-id-in-before-steps_fn)
+         (into {}))))
 
 ;; 루트거나 부모가 모두 방문되었다면, path에 방문기록
 ;; 아니라면 자식들 오름차순 정렬 후 재귀호출 -> 이 부분이 잘 안풀림
 ;; visitable? 판단해서 path-to-goal conj current-id
 ;; children loop 돌면서 재귀호출
-;; dfs
 ;; 앞서 끝난 결과의 영향을 받으면 안좋음
 ;; 결과를 계속 넘겨서 누산기처럼 사용
 ;; 앞 결과를 기다려야하기때문에 좋은 로직은 아님
@@ -115,50 +125,33 @@ Step F must be finished before step E can begin."))
 ;; 우선순위 큐 표준 라이브러리 안됨
 ;; dfs가 아니라 위상정렬 //
 ;; 액션 후 다시
-(defn dfs
-  "그래프의 노드를 깊이 우선 탐색한다."
-  [graph root-ids]
-  (loop [stack root-ids
-         path-to-goal []]
-    (if (empty? stack)
-      path-to-goal
-      ;; let-binding 부분 함수 분리
-      (let [current-node (get graph (peek stack))
-            parents (:parents current-node)
-            children (vec (:children current-node))         ;; vec 필요없다 sequence 끼리는 잘 붙음
-            ;; 자료형 뒤에
-            path-to-goal-set (set path-to-goal)             ;; set 으로 빠른 포함여부 확인하기 위함
-            ;; 중첩보다는 내부를 let-binding으로 분해해서 조건을 하나로 보이게
-            ;; visitable? (and (or (empty? parents)
-            ;                                (every? path-to-goal-set parents))
-            ;                            (not (path-to-goal-set (:id current-node)))
-            ;; 최적화 고민
-            visitable? (and (or (empty? parents)
-                                (every? path-to-goal-set parents))
-                            (not (path-to-goal-set (:id current-node))))]
-        (recur (-> (pop stack)
-                   (concat children)
-                   (sort)
-                   (reverse)
-                   )
-               (if visitable?
-                 (conj path-to-goal (:id current-node))
-                 path-to-goal))))))
-(comment
-  (concat [2 3 4] '(1 2 3))
-  (sort [3 2 1])
-  (peek '(3 2 1))
-  (peek [3 2 1]))
+
+;; 위상정렬
+;; 이전 단계가 없는 것들을 찾는다. v
+;; queue에 넣는다. v
+;; queue를 정렬한다. v
+;; graph, before-step 에서 dequeue한 step 제거하기 v
+;; 경로에 추가하기 v
+(defn topology-sort
+  "위상정렬 시뮬레이션 하기"
+  [graph]
+  (loop [graph' graph
+         step-orders []]
+    (let [queue (find-empty-or-finished-before-step-ids graph')
+          current-id (first queue)]
+      (if (empty? queue)
+        step-orders
+        (recur (remove-step-in-graph current-id graph')
+               (conj step-orders current-id))))))
 
 ;; == Aggregate ==
 (defn solve-part1
-  "깊이 우선 탐색을 통해서 경로를 탐색한다."
+  "매번 재정렬이 필요한(우선순위큐)가 있는 위상정렬문제"
   [lines]
   (let [graph (->> lines
                    (map parse-instruction)
-                   (reduce-to-graph))
-        root-ids (find-root-ids graph)]
-    (->> (dfs graph root-ids)
+                   (reduce-to-graph))]
+    (->> (topology-sort graph)
          (flatten)
          (apply str))))
 
