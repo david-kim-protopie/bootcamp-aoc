@@ -6,7 +6,7 @@
   "출력하고 데이터 반환하는 헬퍼 함수"
   [data]
   (do
-    (println data)
+    (println data (class data))
     data))
 
 (def sample-input (str/split-lines "Step C must be finished before step A can begin.
@@ -144,6 +144,95 @@ Step F must be finished before step E can begin."))
         (recur (remove-step-in-graph current-id graph')
                (conj step-orders current-id))))))
 
+(defn- worker
+  "노동자 맵을 반환하기 위한 함수"
+  [id]
+  {:id id
+   :process-char nil
+   :remind-seconds nil})
+
+(defn- find-idle-workers
+  "일하지 않는 노동자 확인하기"
+  [workers]
+  (->> workers
+       (println-data-bypass)
+       (filter #(let [remind-seconds (:remind-seconds %)]
+                  ;; (= 0) => zero?로 사용가능
+                  ;; nil 검사 먼저
+                  (or (nil? remind-seconds)
+                      (zero? remind-seconds))))))
+
+(defn- find-finished-worker-chars
+  "작업이 끝난 노동자의 문자 목록 확인하기"
+  [workers]
+  (->> (filter #(= 0 (:remind-seconds %)) workers)
+       (map :process-char)))
+
+
+(defn- hire-workers
+  "매개변수의 수 만큼 노동자를 고용한다."
+  [number-of-workers]
+  (->> (range number-of-workers)
+       (map (fn [i] (worker i)))))
+
+(defn- worker-pass-one-second
+  "워커들에게 1초를 흐르게 한다."
+  [worker]
+  (let [{:keys [remind-seconds]} worker]
+    (if (some? remind-seconds)
+      (update worker :remind-seconds (- remind-seconds 1))
+      worker)))
+
+(defn- calculate-char-process-time
+  "문자의 처리 시간을 계산해 반환한다."
+  [char]
+  (+ 1 (- (int char)
+          (int \A))))
+
+
+(defn allocate-steps-to-workers
+  "워커에 스텝문자를 할당한다."
+  [workers step-ids]
+  (let [allocate-count ""]
+    ))
+
+;; 위상정렬 with workers
+;; 1초 흐르게 하기 v
+;; 완료된 worker 찾기 v
+;; 원료된 worker의 문자를 찾아서 graph에서 제거하기 v
+;;
+
+(defn simulation-with-workers
+  "위상정렬 워커와 함께 해보기"
+  [graph workers]
+  (loop [graph' graph
+         step-orders []
+         workers' workers
+         time 0]
+    (if (empty? graph')
+      time
+      (let [pass-one-second-workers (->> workers'
+                                         (map worker-pass-one-second))
+            finished-workers (find-finished-worker-chars pass-one-second-workers)
+            finished-workers-chars (map :process-char finished-workers)
+
+            removed-graph (reduce
+                          (fn [current-graph target-id]
+                            (remove-step-in-graph target-id current-graph))
+                          graph'
+                          finished-workers-chars)
+            empty-or-finished-before-step-ids (find-empty-or-finished-before-step-ids removed-graph)
+            idle-workers (find-idle-workers pass-one-second-workers)
+
+            allocated-workers (allocate-steps-to-workers idle-workers empty-or-finished-before-step-ids)
+            ]
+        (recur removed-graph
+               (conj step-orders finished-workers-chars)
+               (merge pass-one-second-workers allocated-workers)
+               (inc time))
+        ))
+    ))
+
 ;; == Aggregate ==
 (defn solve-part1
   "매번 재정렬이 필요한(우선순위큐)가 있는 위상정렬문제"
@@ -168,3 +257,24 @@ Step F must be finished before step E can begin."))
 ;; loop <-> iterate
 ;; iterate는 종료 조건을 줘야함
 ;; 함수를 많이 쪼개기 / 시뮬레이션
+
+(defn solve-part2
+  "매번 재정렬이 필요한(우선순위큐)가 있는 위상정렬문제"
+  [lines number-of-workers]
+  (let [graph (->> lines
+                 (map parse-instruction)
+                 (reduce-to-graph))
+        workers (hire-workers number-of-workers)]
+    (->> (simulation-with-workers graph workers)
+         (flatten)
+         (apply str))))
+
+(defn sum-of-its-part2
+  [lines number-of-workers]
+  (solve-part2 lines number-of-workers))
+
+(comment
+
+  #_(sum-of-its-part2 sample-input 2)
+  (sum-of-its-part2 (->> (slurp "resources/aoc2018_7.sample.txt" 5)
+                         (str/split-lines))))
