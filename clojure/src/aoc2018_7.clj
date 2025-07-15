@@ -49,15 +49,13 @@ Step F must be finished before step E can begin."))
 
 (defn- generate-downwards-node
   [source destination]
-  {:id source
-   :status :status/inactive
+  {:id           source
    :before-steps #{}
-   :next-steps #{destination}})
+   :next-steps   #{destination}})
 
 (defn- generate-upwards-node
   [source destination]
   {:id           destination
-   :status :status/inactive
    :before-steps #{source}
    :next-steps   #{}})
 
@@ -105,35 +103,15 @@ Step F must be finished before step E can begin."))
 ;; == Process ==
 (defn find-empty-before-step-ids
   "이전단계가 완료된 단계의 id목록을 찾는다."
-  [graph]
+  [graph visited]
   (->> graph
        (vals)
-       (filter #(and (empty? (:before-steps %))
-                     (= :status/inactive (:status %))))
+       (filter #(or (empty? (:before-steps %))
+                    (every? visited (:before-steps %))))
        (map :id)
-       (sort)))
-
-(defn remove-step-in-graph
-  "graph 에서 step을 제거한다."
-  [target-id graph]
-  (let [remove-id-in-before-steps_fn (fn [[step-id step-info]]
-                                       [step-id (update step-info :before-steps disj target-id)])]
-    (->> (dissoc graph target-id)
-         (map remove-id-in-before-steps_fn)
-         (into {}))))
-
-;; 루트거나 부모가 모두 방문되었다면, path에 방문기록
-;; 아니라면 자식들 오름차순 정렬 후 재귀호출 -> 이 부분이 잘 안풀림
-;; visitable? 판단해서 path-to-goal conj current-id
-;; children loop 돌면서 재귀호출
-;; 앞서 끝난 결과의 영향을 받으면 안좋음
-;; 결과를 계속 넘겨서 누산기처럼 사용
-;; 앞 결과를 기다려야하기때문에 좋은 로직은 아님
-;; 벡터(arraylist)와 리스트(linked list)
-;; 스택일 필요는 없음, 어차피 정렬이 들어가기 떄문에
-;; 우선순위 큐 표준 라이브러리 안됨
-;; dfs가 아니라 위상정렬 //
-;; 액션 후 다시
+       (filter #(not (visited %)))
+       (sort)
+       (println-data-bypass)))
 
 ;; 위상정렬
 ;; 이전 단계가 없는 것들을 찾는다. v
@@ -144,14 +122,12 @@ Step F must be finished before step E can begin."))
 (defn topology-sort
   "위상정렬 시뮬레이션 하기"
   [graph]
-  (loop [graph' graph
-         step-orders []]
-    (let [queue (find-empty-before-step-ids graph')
-          current-id (first queue)]
+  (loop [visited []]
+    (let [queue (find-empty-before-step-ids graph (set (println-data-bypass "visited" visited)))
+          current-id (first (println-data-bypass "queue" queue))]
       (if (empty? queue)
-        step-orders
-        (recur (remove-step-in-graph current-id graph')
-               (conj step-orders current-id))))))
+        visited
+        (recur (conj visited (println-data-bypass "current-id" current-id)))))))
 
 (defn- worker
   "노동자 맵을 반환하기 위한 함수"
@@ -164,7 +140,7 @@ Step F must be finished before step E can begin."))
   "일하지 않는 노동자 확인하기"
   [workers]
   (->> workers
-       (filter #(let [remind-seconds (:remind-seconds (val %))]   ;; q.2번 사용되서 let-binding 했으나 반복중에 let-binding을 사용하는게 좋은지?
+       (filter #(let [remind-seconds (:remind-seconds (val %))] ;; q.2번 사용되서 let-binding 했으나 반복중에 let-binding을 사용하는게 좋은지?
                   ;; (= 0) => zero?로 사용가능
                   ;; nil 검사 먼저
                   (or (nil? remind-seconds)
@@ -202,7 +178,7 @@ Step F must be finished before step E can begin."))
   "문자의 처리 시간을 계산해 반환한다."
   [char]
   (+ 61 (- (int (first char))
-          (int \A))))
+           (int \A))))
 
 ;; Q. workers에 step-ids를 넣으려는 시도를 할때 어떤방법이 좋을지?
 ;; 두 길이중 작은 것을 이용하고 range를 이용한 for loop을 사용하는게 좋을지?
@@ -237,38 +213,36 @@ Step F must be finished before step E can begin."))
 ;;ㅇ
 (defn simulation-with-workers
   "위상정렬 워커와 함께 해보기"
-  [graph workers]
-  (loop [graph' graph
-         step-orders []
-         workers' workers
-         time 0]
-    (if (empty? graph')
+  [graph number-of-worker]
+  (loop [visited #{}                                        ;; part1은 순서가 상관있어서 vector를 사용했지만, 이젠 단순 방문여부만 알면 되기때문에 set으로 선택
+         in-process #{}                                     ;; 진행중인 step은 대상이 될 수 없기에 (점유) in-process set을 추가
+         time 0]                                            ;; 잔행되는 시간
+    (if (= (count graph) (count visited))
       time
-      (let [empty-before-step-ids (find-empty-before-step-ids graph')
-            idle-workers (find-idle-workers workers')
-            [allocated-workers allocated-step-ids] (allocate-steps-to-workers idle-workers empty-before-step-ids)
-
-            merged-workers (merge workers' allocated-workers)
-            ;;inactive -> processing 처리하기
-            status-updated-graph (reduce
-                                   (fn [current-graph step-id]
-                                     (assoc-in current-graph [step-id :status] :status/processing))
-                                   graph'
-                                   allocated-step-ids)
-
-            pass-one-second-workers (workers-pass-one-second merged-workers)
-            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
-
-            removed-graph (reduce
-                            (fn [current-graph target-id]
-                              (remove-step-in-graph target-id current-graph))
-                            status-updated-graph
-                            finished-workers-chars)
+      (let [empty-before-step-ids (find-empty-before-step-ids graph visited)
+            ;idle-workers (find-idle-workers workers')
+            ;[allocated-workers allocated-step-ids] (allocate-steps-to-workers idle-workers empty-before-step-ids)
+            ;
+            ;merged-workers (merge workers' allocated-workers)
+            ;;;inactive -> processing 처리하기
+            ;status-updated-graph (reduce
+            ;                       (fn [current-graph step-id]
+            ;                         (assoc-in current-graph [step-id :status] :status/processing))
+            ;                       graph'
+            ;                       allocated-step-ids)
+            ;
+            ;pass-one-second-workers (workers-pass-one-second merged-workers)
+            ;finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
+            ;
+            ;removed-graph (reduce
+            ;                (fn [current-graph target-id]
+            ;                  (remove-step-in-graph target-id current-graph))
+            ;                status-updated-graph
+            ;                finished-workers-chars)
             ]
-        (recur (println-data-bypass "graph" removed-graph)
-               (println-data-bypass "step-orders" (conj step-orders finished-workers-chars))
-               (println-data-bypass "workers'" pass-one-second-workers)
-               (println-data-bypass "time" (inc time)))))))
+        (recur visited
+               in-process
+               time)))))
 
 ;; == Aggregate ==
 (defn solve-part1
