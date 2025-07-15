@@ -7,11 +7,11 @@
   "출력하고 데이터 반환하는 헬퍼 함수"
   ([data]
    (do
-     ;;(println data)
+     (println data)
      data))
   ([prefix data]
    (do
-     ;;(println prefix data)
+     (println prefix data)
      data)))
 
 
@@ -191,8 +191,8 @@ Step F must be finished before step E can begin."))
   [workers]
   (let [pass-one-second_fn (fn [[key worker]]
                              (let [bool (some? (:remind-seconds worker))]
-                               (if (println-data-bypass "bool" bool)
-                                 {key (println-data-bypass "assoc-worker" (assoc worker :remind-seconds (- (:remind-seconds worker) 1)))}
+                               (if bool
+                                 {key (assoc worker :remind-seconds (- (:remind-seconds worker) 1))}
                                  {key worker}
                                  )))]
     (->> (map pass-one-second_fn workers)
@@ -216,7 +216,7 @@ Step F must be finished before step E can begin."))
     (let [allocated-workers-map (reduce
                                   (fn [acc-map [worker-id step-id]]
                                     ;; 3. 원본 워커 정보를 가져와 갱신한 뒤, 누적 맵(acc-map)에 추가합니다.
-                                    (let [original-worker (get (println-data-bypass "idle-workers" idle-workers) worker-id)]
+                                    (let [original-worker (get idle-workers worker-id)]
                                       (assoc acc-map worker-id
                                                      (assoc original-worker
                                                        :process-char step-id
@@ -228,8 +228,7 @@ Step F must be finished before step E can begin."))
           allocated-step-ids (map second assignments)]
 
       ;; 5. 최종 결과를 벡터로 묶어 반환합니다.
-      [(println-data-bypass "allocated-workers" allocated-workers-map)
-       (println-data-bypass "allocated-step-ids" allocated-step-ids)])))
+      [allocated-workers-map allocated-step-ids])))
 
 ;; 위상정렬 with workers
 ;; 1초 흐르게 하기 v
@@ -244,32 +243,32 @@ Step F must be finished before step E can begin."))
          workers' workers
          time 0]
     (if (empty? graph')
-      (println-data-bypass "time" time)
-      (let [pass-one-second-workers (workers-pass-one-second (println-data-bypass "workers'" workers'))
-            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
-            idle-workers (find-idle-workers (println-data-bypass "pass-one-second-workers" pass-one-second-workers))
-
-            removed-graph (reduce
-                            (fn [current-graph target-id]
-                              (remove-step-in-graph target-id current-graph))
-                            graph'
-                            (println-data-bypass "finished-workers-chars" finished-workers-chars))
-            empty-before-step-ids (find-empty-before-step-ids removed-graph)
-
+      time
+      (let [empty-before-step-ids (find-empty-before-step-ids graph')
+            idle-workers (find-idle-workers workers')
             [allocated-workers allocated-step-ids] (allocate-steps-to-workers idle-workers empty-before-step-ids)
+
+            merged-workers (merge workers' allocated-workers)
             ;;inactive -> processing 처리하기
             status-updated-graph (reduce
                                    (fn [current-graph step-id]
                                      (assoc-in current-graph [step-id :status] :status/processing))
-                                   removed-graph
+                                   graph'
                                    allocated-step-ids)
+
+            pass-one-second-workers (workers-pass-one-second merged-workers)
+            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
+
+            removed-graph (reduce
+                            (fn [current-graph target-id]
+                              (remove-step-in-graph target-id current-graph))
+                            status-updated-graph
+                            finished-workers-chars)
             ]
-        (recur (println-data-bypass "status-updated-graph" status-updated-graph)
-               (conj step-orders finished-workers-chars)
-               (merge pass-one-second-workers (println-data-bypass "allocated-workers" allocated-workers))
-               (inc time))
-        ))
-    ))
+        (recur (println-data-bypass "graph" removed-graph)
+               (println-data-bypass "step-orders" (conj step-orders finished-workers-chars))
+               (println-data-bypass "workers'" pass-one-second-workers)
+               (println-data-bypass "time" (inc time)))))))
 
 ;; == Aggregate ==
 (defn solve-part1
