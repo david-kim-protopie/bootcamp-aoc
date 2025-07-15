@@ -1,13 +1,19 @@
 (ns aoc2018_7
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.pprint :as pp]))
 
 ;; Helper
 (defn- println-data-bypass
   "출력하고 데이터 반환하는 헬퍼 함수"
-  [data]
-  (do
-    (println data (class data))
-    data))
+  ([data]
+   (do
+     ;;(println data)
+     data))
+  ([prefix data]
+   (do
+     ;;(println prefix data)
+     data)))
+
 
 (def sample-input (str/split-lines "Step C must be finished before step A can begin.
 Step C must be finished before step F can begin.
@@ -38,18 +44,20 @@ Step F must be finished before step E can begin."))
   [line]
   (let [pattern #"Step ([A-Z]) must be finished before step ([A-Z]) can begin."
         [_ source destination] (re-matches pattern line)]
-    {:source source
+    {:source      source
      :destination destination}))
 
 (defn- generate-downwards-node
   [source destination]
-  {:id           source
+  {:id source
+   :status :status/inactive
    :before-steps #{}
-   :next-steps   #{destination}})
+   :next-steps #{destination}})
 
 (defn- generate-upwards-node
   [source destination]
   {:id           destination
+   :status :status/inactive
    :before-steps #{source}
    :next-steps   #{}})
 
@@ -62,28 +70,28 @@ Step F must be finished before step E can begin."))
 ;; 가독성 고려해보기 1/2 페어 3/4 페어 v
 (defn connect-two-steps
   "두 노드를 연결하는 reduce 핸들러"
-  [graph' instruction]
+  [graph instruction]
   (let [{:keys [source destination]} instruction
         downwards-node (generate-downwards-node source destination)
         upwards-node (generate-upwards-node source destination)
         assoc-graph-with-condition (fn [graph
-                                      target-id
-                                      connected-id
-                                      key
-                                      apply-node]
-                                   (if (graph target-id)
-                                     (update-in graph [target-id key] conj connected-id)
-                                     (assoc graph target-id apply-node)))]
-    (-> graph'
+                                        target-id
+                                        connected-id
+                                        key
+                                        apply-node]
+                                     (if (graph target-id)
+                                       (update-in graph [target-id key] conj connected-id)
+                                       (assoc graph target-id apply-node)))]
+    (-> graph
         (assoc-graph-with-condition source
-                                  destination
-                                  :next-steps
-                                  downwards-node)
-        
+                                    destination
+                                    :next-steps
+                                    downwards-node)
+
         (assoc-graph-with-condition destination
-                                  source
-                                  :before-steps
-                                  upwards-node))))
+                                    source
+                                    :before-steps
+                                    upwards-node))))
 
 ;; previous step, next step 문제의 나오는 단어를 사용
 (defn reduce-to-graph
@@ -95,12 +103,13 @@ Step F must be finished before step E can begin."))
   (reduce connect-two-steps {} instructions))
 
 ;; == Process ==
-(defn find-empty-or-finished-before-step-ids
+(defn find-empty-before-step-ids
   "이전단계가 완료된 단계의 id목록을 찾는다."
   [graph]
   (->> graph
        (vals)
-       (filter #(empty? (:before-steps %)))
+       (filter #(and (empty? (:before-steps %))
+                     (= :status/inactive (:status %))))
        (map :id)
        (sort)))
 
@@ -137,7 +146,7 @@ Step F must be finished before step E can begin."))
   [graph]
   (loop [graph' graph
          step-orders []]
-    (let [queue (find-empty-or-finished-before-step-ids graph')
+    (let [queue (find-empty-before-step-ids graph')
           current-id (first queue)]
       (if (empty? queue)
         step-orders
@@ -147,61 +156,86 @@ Step F must be finished before step E can begin."))
 (defn- worker
   "노동자 맵을 반환하기 위한 함수"
   [id]
-  {:id id
-   :process-char nil
+  {:id             id
+   :process-char   nil
    :remind-seconds nil})
 
 (defn- find-idle-workers
   "일하지 않는 노동자 확인하기"
   [workers]
   (->> workers
-       (println-data-bypass)
-       (filter #(let [remind-seconds (:remind-seconds %)]
+       (filter #(let [remind-seconds (:remind-seconds (val %))]   ;; q.2번 사용되서 let-binding 했으나 반복중에 let-binding을 사용하는게 좋은지?
                   ;; (= 0) => zero?로 사용가능
                   ;; nil 검사 먼저
                   (or (nil? remind-seconds)
-                      (zero? remind-seconds))))))
+                      (zero? remind-seconds))))
+       (into {})))
 
 (defn- find-finished-worker-chars
   "작업이 끝난 노동자의 문자 목록 확인하기"
   [workers]
-  (->> (filter #(= 0 (:remind-seconds %)) workers)
+  (->> workers
+       (vals)
+       (filter #(= 0 (:remind-seconds %)))
        (map :process-char)))
-
 
 (defn- hire-workers
   "매개변수의 수 만큼 노동자를 고용한다."
   [number-of-workers]
   (->> (range number-of-workers)
-       (map (fn [i] (worker i)))))
+       (map (fn [i] {i (worker i)}))
+       (into {})))
 
-(defn- worker-pass-one-second
+(defn- workers-pass-one-second
   "워커들에게 1초를 흐르게 한다."
-  [worker]
-  (let [{:keys [remind-seconds]} worker]
-    (if (some? remind-seconds)
-      (update worker :remind-seconds (- remind-seconds 1))
-      worker)))
+  [workers]
+  (let [pass-one-second_fn (fn [[key worker]]
+                             (let [bool (some? (:remind-seconds worker))]
+                               (if (println-data-bypass "bool" bool)
+                                 {key (println-data-bypass "assoc-worker" (assoc worker :remind-seconds (- (:remind-seconds worker) 1)))}
+                                 {key worker}
+                                 )))]
+    (->> (map pass-one-second_fn workers)
+         (into {}))))
 
 (defn- calculate-char-process-time
   "문자의 처리 시간을 계산해 반환한다."
   [char]
-  (+ 1 (- (int char)
+  (+ 61 (- (int (first char))
           (int \A))))
 
-
+;; Q. workers에 step-ids를 넣으려는 시도를 할때 어떤방법이 좋을지?
+;; 두 길이중 작은 것을 이용하고 range를 이용한 for loop을 사용하는게 좋을지?
+;; 아니면 괜찮은 방법이 있을지?
 (defn allocate-steps-to-workers
   "워커에 스텝문자를 할당한다."
-  [workers step-ids]
-  (let [allocate-count ""]
-    ))
+  [idle-workers step-ids]
+  (let [assignments (map vector (keys idle-workers) step-ids)]
+
+    ;; 2. reduce를 사용해 '할당된 워커들'로만 구성된 새로운 맵을 만듭니다.
+    (let [allocated-workers-map (reduce
+                                  (fn [acc-map [worker-id step-id]]
+                                    ;; 3. 원본 워커 정보를 가져와 갱신한 뒤, 누적 맵(acc-map)에 추가합니다.
+                                    (let [original-worker (get (println-data-bypass "idle-workers" idle-workers) worker-id)]
+                                      (assoc acc-map worker-id
+                                                     (assoc original-worker
+                                                       :process-char step-id
+                                                       :remind-seconds (calculate-char-process-time step-id)))))
+                                  {}                        ; 빈 맵에서 시작
+                                  assignments)
+
+          ;; 4. 할당에 사용된 스텝 ID 목록을 추출합니다.
+          allocated-step-ids (map second assignments)]
+
+      ;; 5. 최종 결과를 벡터로 묶어 반환합니다.
+      [(println-data-bypass "allocated-workers" allocated-workers-map)
+       (println-data-bypass "allocated-step-ids" allocated-step-ids)])))
 
 ;; 위상정렬 with workers
 ;; 1초 흐르게 하기 v
 ;; 완료된 worker 찾기 v
 ;; 원료된 worker의 문자를 찾아서 graph에서 제거하기 v
-;;
-
+;;ㅇ
 (defn simulation-with-workers
   "위상정렬 워커와 함께 해보기"
   [graph workers]
@@ -210,25 +244,29 @@ Step F must be finished before step E can begin."))
          workers' workers
          time 0]
     (if (empty? graph')
-      time
-      (let [pass-one-second-workers (->> workers'
-                                         (map worker-pass-one-second))
-            finished-workers (find-finished-worker-chars pass-one-second-workers)
-            finished-workers-chars (map :process-char finished-workers)
+      (println-data-bypass "time" time)
+      (let [pass-one-second-workers (workers-pass-one-second (println-data-bypass "workers'" workers'))
+            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
+            idle-workers (find-idle-workers (println-data-bypass "pass-one-second-workers" pass-one-second-workers))
 
             removed-graph (reduce
-                          (fn [current-graph target-id]
-                            (remove-step-in-graph target-id current-graph))
-                          graph'
-                          finished-workers-chars)
-            empty-or-finished-before-step-ids (find-empty-or-finished-before-step-ids removed-graph)
-            idle-workers (find-idle-workers pass-one-second-workers)
+                            (fn [current-graph target-id]
+                              (remove-step-in-graph target-id current-graph))
+                            graph'
+                            (println-data-bypass "finished-workers-chars" finished-workers-chars))
+            empty-before-step-ids (find-empty-before-step-ids removed-graph)
 
-            allocated-workers (allocate-steps-to-workers idle-workers empty-or-finished-before-step-ids)
+            [allocated-workers allocated-step-ids] (allocate-steps-to-workers idle-workers empty-before-step-ids)
+            ;;inactive -> processing 처리하기
+            status-updated-graph (reduce
+                                   (fn [current-graph step-id]
+                                     (assoc-in current-graph [step-id :status] :status/processing))
+                                   removed-graph
+                                   allocated-step-ids)
             ]
-        (recur removed-graph
+        (recur (println-data-bypass "status-updated-graph" status-updated-graph)
                (conj step-orders finished-workers-chars)
-               (merge pass-one-second-workers allocated-workers)
+               (merge pass-one-second-workers (println-data-bypass "allocated-workers" allocated-workers))
                (inc time))
         ))
     ))
@@ -241,7 +279,6 @@ Step F must be finished before step E can begin."))
                    (map parse-instruction)
                    (reduce-to-graph))]
     (->> (topology-sort graph)
-         (flatten)
          (apply str))))
 
 (defn sum-of-its-part1
@@ -259,15 +296,13 @@ Step F must be finished before step E can begin."))
 ;; 함수를 많이 쪼개기 / 시뮬레이션
 
 (defn solve-part2
-  "매번 재정렬이 필요한(우선순위큐)가 있는 위상정렬문제"
+  "워커가 있는 스케쥴링 문제"
   [lines number-of-workers]
   (let [graph (->> lines
-                 (map parse-instruction)
-                 (reduce-to-graph))
+                   (map parse-instruction)
+                   (reduce-to-graph))
         workers (hire-workers number-of-workers)]
-    (->> (simulation-with-workers graph workers)
-         (flatten)
-         (apply str))))
+    (simulation-with-workers graph workers)))
 
 (defn sum-of-its-part2
   [lines number-of-workers]
@@ -276,5 +311,5 @@ Step F must be finished before step E can begin."))
 (comment
 
   #_(sum-of-its-part2 sample-input 2)
-  (sum-of-its-part2 (->> (slurp "resources/aoc2018_7.sample.txt" 5)
-                         (str/split-lines))))
+  (sum-of-its-part2 (->> (slurp "resources/aoc2018_7.sample.txt")
+                         (str/split-lines)) 5))
