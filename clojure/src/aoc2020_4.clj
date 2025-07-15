@@ -74,6 +74,8 @@
 ;ecl (Eye Color) - exactly one of: amb blu brn gry grn hzl oth.
 ;pid (Passport ID) - a nine-digit number, including leading zeroes.
 ;cid (Country ID) - ignored, missing or not.
+
+;;
 (s/def ::byr ::byr-valid?)
 (s/def ::iyr ::iyr-valid?)
 (s/def ::eyr ::eyr-valid?)
@@ -83,6 +85,12 @@
 (s/def ::pid ::pid-valid?)
 (s/def ::cid string?)
 
+;; 키만 검사하는 방법 찾기
+;; s/conform spec에 선언된 것을 parse로 사용할 수 있음
+;; valid만 하면 true/false 만 가능함
+;; s/conform을 활용하는게 더 spec을 잘 사용하는 방식
+;; s/and 만 사용하는게 아닌 다른 논리연산자 더 사용해보기
+;; spec 끼리만 사용하는 것은 아니다. production 코드에 많이 사용많이 안함.
 (s/def ::passport (s/keys :req [::byr ::iyr ::eyr ::hgt ::hcl ::ecl ::pid]
                           :opt [::cid]))
 
@@ -146,7 +154,7 @@ iyr:2010 hgt:158cm hcl:#b6652a ecl:blu byr:1944 eyr:2021 pid:093154719"))
 (defn solve-part1
   [input]
   (->> (partition-by empty? input)
-       (filter #(not (empty? (first %))))
+       (filter #(not-empty (first %)))
        (map parse-passport)
        (filter #(s/valid? ::passport %))
        (count)))
