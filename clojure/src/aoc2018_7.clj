@@ -7,11 +7,11 @@
   "출력하고 데이터 반환하는 헬퍼 함수"
   ([data]
    (do
-     (println data)
+     ;(println data)
      data))
   ([prefix data]
    (do
-     (println prefix data)
+     ;(println prefix data)
      data)))
 
 
@@ -101,17 +101,20 @@ Step F must be finished before step E can begin."))
   (reduce connect-two-steps {} instructions))
 
 ;; == Process ==
-(defn find-empty-before-step-ids
+(defn find-processable-step-ids
   "이전단계가 완료된 단계의 id목록을 찾는다."
-  [graph visited]
-  (->> graph
-       (vals)
-       (filter #(or (empty? (:before-steps %))
-                    (every? visited (:before-steps %))))
-       (map :id)
-       (filter #(not (visited %)))
-       (sort)
-       (println-data-bypass)))
+  ([graph visited]
+   (find-processable-step-ids graph visited #{}))
+  ([graph visited in-process]
+   (->> graph
+        (vals)
+        (filter #(or (empty? (:before-steps %))
+                     (every? visited (:before-steps %))))
+        (map :id)
+        (filter #(and (not (visited %))
+                      (not (in-process %))))
+        (sort))))
+
 
 ;; 위상정렬
 ;; 이전 단계가 없는 것들을 찾는다. v
@@ -123,7 +126,7 @@ Step F must be finished before step E can begin."))
   "위상정렬 시뮬레이션 하기"
   [graph]
   (loop [visited []]
-    (let [queue (find-empty-before-step-ids graph (set (println-data-bypass "visited" visited)))
+    (let [queue (find-processable-step-ids graph (set (println-data-bypass "visited" visited)))
           current-id (first (println-data-bypass "queue" queue))]
       (if (empty? queue)
         visited
@@ -136,43 +139,18 @@ Step F must be finished before step E can begin."))
    :process-char   nil
    :remind-seconds nil})
 
-(defn- find-idle-workers
-  "일하지 않는 노동자 확인하기"
-  [workers]
-  (->> workers
-       (filter #(let [remind-seconds (:remind-seconds (val %))] ;; q.2번 사용되서 let-binding 했으나 반복중에 let-binding을 사용하는게 좋은지?
-                  ;; (= 0) => zero?로 사용가능
-                  ;; nil 검사 먼저
-                  (or (nil? remind-seconds)
-                      (zero? remind-seconds))))
-       (into {})))
-
 (defn- find-finished-worker-chars
   "작업이 끝난 노동자의 문자 목록 확인하기"
   [workers]
   (->> workers
-       (vals)
-       (filter #(= 0 (:remind-seconds %)))
+       (filter #(zero? (:remind-seconds %)))
        (map :process-char)))
-
-(defn- hire-workers
-  "매개변수의 수 만큼 노동자를 고용한다."
-  [number-of-workers]
-  (->> (range number-of-workers)
-       (map (fn [i] {i (worker i)}))
-       (into {})))
 
 (defn- workers-pass-one-second
   "워커들에게 1초를 흐르게 한다."
   [workers]
-  (let [pass-one-second_fn (fn [[key worker]]
-                             (let [bool (some? (:remind-seconds worker))]
-                               (if bool
-                                 {key (assoc worker :remind-seconds (- (:remind-seconds worker) 1))}
-                                 {key worker}
-                                 )))]
-    (->> (map pass-one-second_fn workers)
-         (into {}))))
+  (map (fn [worker]
+         (assoc worker :remind-seconds (dec (:remind-seconds worker)))) workers))
 
 (defn- calculate-char-process-time
   "문자의 처리 시간을 계산해 반환한다."
@@ -183,28 +161,17 @@ Step F must be finished before step E can begin."))
 ;; Q. workers에 step-ids를 넣으려는 시도를 할때 어떤방법이 좋을지?
 ;; 두 길이중 작은 것을 이용하고 range를 이용한 for loop을 사용하는게 좋을지?
 ;; 아니면 괜찮은 방법이 있을지?
-(defn allocate-steps-to-workers
+(defn assign-steps-to-workers
   "워커에 스텝문자를 할당한다."
-  [idle-workers step-ids]
-  (let [assignments (map vector (keys idle-workers) step-ids)]
-
-    ;; 2. reduce를 사용해 '할당된 워커들'로만 구성된 새로운 맵을 만듭니다.
-    (let [allocated-workers-map (reduce
-                                  (fn [acc-map [worker-id step-id]]
-                                    ;; 3. 원본 워커 정보를 가져와 갱신한 뒤, 누적 맵(acc-map)에 추가합니다.
-                                    (let [original-worker (get idle-workers worker-id)]
-                                      (assoc acc-map worker-id
-                                                     (assoc original-worker
-                                                       :process-char step-id
-                                                       :remind-seconds (calculate-char-process-time step-id)))))
-                                  {}                        ; 빈 맵에서 시작
-                                  assignments)
-
-          ;; 4. 할당에 사용된 스텝 ID 목록을 추출합니다.
-          allocated-step-ids (map second assignments)]
-
-      ;; 5. 최종 결과를 벡터로 묶어 반환합니다.
-      [allocated-workers-map allocated-step-ids])))
+  [number-of-idle-workers step-ids]
+  (let [assign-count (min number-of-idle-workers (count step-ids))
+        assigned-steps-ids (take assign-count step-ids)
+        assigned-worker_fn (fn [step-id]
+                             {:process-char   step-id
+                              :remind-seconds (calculate-char-process-time step-id)})
+        assign-workers (map assigned-worker_fn assigned-steps-ids)]
+    [(println-data-bypass "assign-workers" assign-workers)
+     (println-data-bypass "assigned-steps-ids" assigned-steps-ids)]))
 
 ;; 위상정렬 with workers
 ;; 1초 흐르게 하기 v
@@ -213,36 +180,30 @@ Step F must be finished before step E can begin."))
 ;;ㅇ
 (defn simulation-with-workers
   "위상정렬 워커와 함께 해보기"
-  [graph number-of-worker]
-  (loop [visited #{}                                        ;; part1은 순서가 상관있어서 vector를 사용했지만, 이젠 단순 방문여부만 알면 되기때문에 set으로 선택
+  [graph number-of-workers]
+  (loop [workers []
+         visited #{}                                        ;; part1은 순서가 상관있어서 vector를 사용했지만, 이젠 단순 방문여부만 알면 되기때문에 set으로 선택
          in-process #{}                                     ;; 진행중인 step은 대상이 될 수 없기에 (점유) in-process set을 추가
          time 0]                                            ;; 잔행되는 시간
     (if (= (count graph) (count visited))
       time
-      (let [empty-before-step-ids (find-empty-before-step-ids graph visited)
-            ;idle-workers (find-idle-workers workers')
-            ;[allocated-workers allocated-step-ids] (allocate-steps-to-workers idle-workers empty-before-step-ids)
-            ;
-            ;merged-workers (merge workers' allocated-workers)
-            ;;;inactive -> processing 처리하기
-            ;status-updated-graph (reduce
-            ;                       (fn [current-graph step-id]
-            ;                         (assoc-in current-graph [step-id :status] :status/processing))
-            ;                       graph'
-            ;                       allocated-step-ids)
-            ;
-            ;pass-one-second-workers (workers-pass-one-second merged-workers)
-            ;finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
-            ;
-            ;removed-graph (reduce
-            ;                (fn [current-graph target-id]
-            ;                  (remove-step-in-graph target-id current-graph))
-            ;                status-updated-graph
-            ;                finished-workers-chars)
+      (let [processable-step-ids (find-processable-step-ids graph (println-data-bypass "visited" visited) (println-data-bypass "in-process" in-process))
+            number-of-idle-workers (- number-of-workers (count (println-data-bypass "workers" workers)))
+            [assigned-workers assigned-step-ids] (assign-steps-to-workers number-of-idle-workers processable-step-ids)
+
+            workers' (into workers assigned-workers)
+            in-process' (into in-process assigned-step-ids)
+
+            pass-one-second-workers (workers-pass-one-second (println-data-bypass "workers'" workers'))
+            finished-workers-chars (find-finished-worker-chars (println-data-bypass "pass-one-second-workers" pass-one-second-workers))
             ]
-        (recur visited
-               in-process
-               time)))))
+        (recur (filter #(< 0 (:remind-seconds %)) pass-one-second-workers)
+               (into visited finished-workers-chars)
+               in-process'
+               (inc time))))))
+
+(comment
+  (into [] '(1 2 3)))
 
 ;; == Aggregate ==
 (defn solve-part1
@@ -273,16 +234,14 @@ Step F must be finished before step E can begin."))
   [lines number-of-workers]
   (let [graph (->> lines
                    (map parse-instruction)
-                   (reduce-to-graph))
-        workers (hire-workers number-of-workers)]
-    (simulation-with-workers graph workers)))
+                   (reduce-to-graph))]
+    (simulation-with-workers graph number-of-workers)))
 
 (defn sum-of-its-part2
   [lines number-of-workers]
   (solve-part2 lines number-of-workers))
 
 (comment
-
   #_(sum-of-its-part2 sample-input 2)
   (sum-of-its-part2 (->> (slurp "resources/aoc2018_7.sample.txt")
                          (str/split-lines)) 5))
