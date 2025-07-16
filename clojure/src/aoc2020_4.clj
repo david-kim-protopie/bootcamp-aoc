@@ -26,44 +26,34 @@
 
 ;; spec 선언
 
+(s/def ::passport-part1 (s/keys :req-un [::byr ::iyr ::eyr ::hgt ::hcl ::ecl ::pid] ;;:req <-> :req-un 차이는 namespace 까지 검사할지 필요에 따라 사용
+                                :opt-un [::cid]))
 
 (defn- check-number-range
   "수의 범위 검사를해서 boolean 결과를 반환한다."
   [number start end]
-  (and (<= start number)
-       (>= end number)))
+  (let [parsed-number (parse-long number)]
+    (when (some? parsed-number)
+      (<= start parsed-number end))))
 
-(defn- check-height-range
-  "입력받은 문자열의 단위를 확인하고 단위별 범위에 부합하는지 확인 후 반환한다.
-  input: height / 183cm or 67in
-         conditions {cm {start 150
-                         end 193},
-                     in {start 59
-                         end 76}}
-  output: true or false"
-  [height conditions]
-  (if-let [[_ number unit] (re-matches #"(\d+)(cm|in)" height)]
-    (let [condition (get conditions unit)
-          {:keys [start end]} condition]
-      (check-number-range (parse-long number) start end))
+(defn- height-in-range
+  "입력받은 문자열이 'in' 단위인지 확인하고 맞다면 범위(59~76)에 부합하는지 확인 후 true or false를 반환한다.
+  input: height / 67in
+  output: boolean"
+  [height]
+  (if-let [[_ number] (re-matches #"(\d+)in" height)]
+    (check-number-range number 59 76)
     false))
 
-(def conditions {"cm" {:start 150
-                       :end   193}
-                 "in" {:start 59
-                       :end   76}})
-(s/def ::hgt-valid? (s/and string? #(check-height-range % conditions)))
-(s/def ::byr-valid? (s/and string? #(check-number-range (parse-long %) 1920 2002)))
-(s/def ::iyr-valid? (s/and string? #(check-number-range (parse-long %) 2010 2020)))
-(s/def ::eyr-valid? (s/and string? #(check-number-range (parse-long %) 2020 2030)))
+(defn- height-cm-range
+  "입력받은 문자열이 'cm' 단위인지 확인하고 맞다면 범위(150~193)에 부합하는지 확인 후 true or false를 반환한다.
+  input: height / 183in
+  output: boolean"
+  [height]
+  (if-let [[_ number] (re-matches #"(\d+)cm" height)]
+    (check-number-range number 150 193)
+    false))
 
-(def color-code-pattern #"#[0-9a-f]{6}$")
-(s/def ::hcl-valid? (s/and string? #(re-matches color-code-pattern %)))
-(def eye-color-set #{"amb" "blu" "brn" "gry" "grn" "hzl" "oth"})
-(s/def ::ecl-valid? (s/and string? eye-color-set))
-
-(def pid-pattern #"[0-9]{9}$")
-(s/def ::pid-valid? (s/and #(re-matches pid-pattern %)))
 ;byr (Birth Year) - four digits; at least 1920 and at most 2002.
 ;iyr (Issue Year) - four digits; at least 2010 and at most 2020.
 ;eyr (Expiration Year) - four digits; at least 2020 and at most 2030.
@@ -74,16 +64,15 @@
 ;ecl (Eye Color) - exactly one of: amb blu brn gry grn hzl oth.
 ;pid (Passport ID) - a nine-digit number, including leading zeroes.
 ;cid (Country ID) - ignored, missing or not.
-
-;;
-(s/def ::byr ::byr-valid?)
-(s/def ::iyr ::iyr-valid?)
-(s/def ::eyr ::eyr-valid?)
-(s/def ::hgt ::hgt-valid?)
-(s/def ::hcl ::hcl-valid?)
-(s/def ::ecl ::ecl-valid?)
-(s/def ::pid ::pid-valid?)
-(s/def ::cid string?)
+(s/def ::byr (s/and #(check-number-range % 1920 2002)))
+(s/def ::iyr (s/and #(check-number-range % 2010 2020)))
+(s/def ::eyr (s/and #(check-number-range % 2020 2030)))
+(s/def ::hgt (s/or :inch #(height-in-range %)
+                   :centi-meter #(height-cm-range %)))
+(s/def ::hcl #(re-matches #"#[0-9a-f]{6}$" %))
+(def eye-color-set #{"amb" "blu" "brn" "gry" "grn" "hzl" "oth"})
+(s/def ::ecl eye-color-set)
+(s/def ::pid #(re-matches #"[0-9]{9}$" %))
 
 ;; 키만 검사하는 방법 찾기
 ;; s/conform spec에 선언된 것을 parse로 사용할 수 있음
@@ -91,8 +80,8 @@
 ;; s/conform을 활용하는게 더 spec을 잘 사용하는 방식
 ;; s/and 만 사용하는게 아닌 다른 논리연산자 더 사용해보기
 ;; spec 끼리만 사용하는 것은 아니다. production 코드에 많이 사용많이 안함.
-(s/def ::passport (s/keys :req [::byr ::iyr ::eyr ::hgt ::hcl ::ecl ::pid]
-                          :opt [::cid]))
+(s/def ::passport-part2 (s/keys :req-un [::byr ::iyr ::eyr ::hgt ::hcl ::ecl ::pid] ;;:req <-> :req-un 차이는 namespace 까지 검사할지 필요에 따라 사용
+                                :opt-un [::cid]))
 
 (def sample-input (str/split-lines "ecl:gry pid:860033327 eyr:2020 hcl:#fffffd
 byr:1937 iyr:2017 cid:147 hgt:183cm
@@ -138,7 +127,7 @@ iyr:2010 hgt:158cm hcl:#b6652a ecl:blu byr:1944 eyr:2021 pid:093154719"))
 (defn- passport-spec-keyword
   "입력받은 문자열을 이용해서 여권 스펙검사에 필요한 키워드를 변환 후 반환한다."
   [target-keyword]
-  (keyword (str *ns*) target-keyword))
+  (keyword target-keyword))
 
 (defn parse-passport
   "멀티라인 문자열을 입력받아 passport로 변환한다."
@@ -156,7 +145,8 @@ iyr:2010 hgt:158cm hcl:#b6652a ecl:blu byr:1944 eyr:2021 pid:093154719"))
   (->> (partition-by empty? input)
        (filter #(not-empty (first %)))
        (map parse-passport)
-       (filter #(s/valid? ::passport %))
+       (map #(s/conform ::passport-part1 %))
+       (remove s/invalid?)
        (count)))
 
 (defn passport-processing-part1
@@ -173,7 +163,8 @@ iyr:2010 hgt:158cm hcl:#b6652a ecl:blu byr:1944 eyr:2021 pid:093154719"))
   (->> (partition-by empty? input)
        (filter #(not (empty? (first %))))
        (map parse-passport)
-       (filter #(s/valid? ::passport %))
+       (map #(s/conform ::passport-part2 %))
+       (remove s/invalid?)
        (count)))
 
 (defn passport-processing-part2
