@@ -1,13 +1,19 @@
 (ns aoc2018_7
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.pprint :as pp]))
 
 ;; Helper
 (defn- println-data-bypass
   "출력하고 데이터 반환하는 헬퍼 함수"
-  [data]
-  (do
-    (println data)
-    data))
+  ([data]
+   (do
+     (println data)
+     data))
+  ([prefix data]
+   (do
+     (println prefix data)
+     data)))
+
 
 (def sample-input (str/split-lines "Step C must be finished before step A can begin.
 Step C must be finished before step F can begin.
@@ -38,128 +44,174 @@ Step F must be finished before step E can begin."))
   [line]
   (let [pattern #"Step ([A-Z]) must be finished before step ([A-Z]) can begin."
         [_ source destination] (re-matches pattern line)]
-    {:source source
+    {:source      source
      :destination destination}))
 
 (defn- generate-downwards-node
   [source destination]
-  {:id source
-   :parents []
-   :children [destination]})
+  {:id           source
+   :before-steps #{}
+   :next-steps   #{destination}})
 
 (defn- generate-upwards-node
   [source destination]
-  {:id destination
-   :parents [source]
-   :children []})
+  {:id           destination
+   :before-steps #{source}
+   :next-steps   #{}})
 
 ;; Q.if 문 2개를 한 함수에서 실행하기 위한 방법
 ;; cond-> 사용해서 파이프라인 구성
-(defn connect-two-nodes
+;; 변수' => 재활용 컨벤션 v
+;; if else if else 2번 정도 나열은 cond thread macro 사용안하는게 좋음 v
+;; if else block을 let-binding 해서 매개변수만 받아서 처리 v
+;; fn으로 묶는 방법 v
+;; 가독성 고려해보기 1/2 페어 3/4 페어 v
+(defn connect-two-steps
   "두 노드를 연결하는 reduce 핸들러"
   [graph instruction]
   (let [{:keys [source destination]} instruction
         downwards-node (generate-downwards-node source destination)
-        upwards-node (generate-upwards-node source destination)]
-    ;; 변수' => 재활용 컨벤션
-    ;; if else if else 2번 정도 나열은 cond thread macro
-    ;; if else block을 let-binding 해서 매개변수만 받아서 처리
-    ;; fn으로 묶는 방법
-    ;; 가독성 고려해보기 1/2 페어 3/4 페어
-    (cond-> graph
-            ;;1
-      (graph source)
-      (update-in [source :children] conj destination)
-            ;;2
-      (not (graph source))
-      (assoc source downwards-node)
+        upwards-node (generate-upwards-node source destination)
+        assoc-graph-with-condition (fn [graph
+                                        target-id
+                                        connected-id
+                                        key
+                                        apply-node]
+                                     (if (graph target-id)
+                                       (update-in graph [target-id key] conj connected-id)
+                                       (assoc graph target-id apply-node)))]
+    (-> graph
+        (assoc-graph-with-condition source
+                                    destination
+                                    :next-steps
+                                    downwards-node)
 
-            ;;3
-      (graph destination)
-      (update-in [destination :parents] conj source)
-            ;;4
-      (not (graph destination))
-      (assoc destination upwards-node)
-      )))
+        (assoc-graph-with-condition destination
+                                    source
+                                    :before-steps
+                                    upwards-node))))
 
 ;; previous step, next step 문제의 나오는 단어를 사용
 (defn reduce-to-graph
-  "파싱된 지침을 이용해서 노드간 양방향(parents<->children)으로 알고 있는 그래프를 반환한다.
+  "순환하지 않는 graph(Directed Acyclic Graph)로 지침들을 입력받아서 변환한다.
   input: instruction  {:source source
                        :destination destination}
-  output: graph {A {:id A :parents [] :children []} ...}"
+  output: graph {A {:id A ::before-steps [] ::next-steps []} ...}"
   [instructions]
-  (reduce connect-two-nodes {} instructions))
+  (reduce connect-two-steps {} instructions))
 
 ;; == Process ==
-(defn find-root-ids
-  "그래프에서 부모가 없는 root 노드의 id 목록을 찾는다."
-  [graph]
-  (->> graph
-       (vals)
-       (filter #(empty? (:parents %)))
-       (map :id)
-       (sort)
-       (reverse)))
+(defn find-processable-step-ids
+  "이전단계가 완료된 단계의 id목록을 찾는다."
+  ([graph visited]
+   (find-processable-step-ids graph visited #{}))
+  ([graph visited in-process]
+   (->> graph
+        (vals)
+        (filter #(or (empty? (:before-steps %))
+                     (every? visited (:before-steps %))))
+        (map :id)
+        (filter #(and (not (visited %))
+                      (not (in-process %))))
+        (sort))))
 
-;; 루트거나 부모가 모두 방문되었다면, path에 방문기록
-;; 아니라면 자식들 오름차순 정렬 후 재귀호출 -> 이 부분이 잘 안풀림
-;; visitable? 판단해서 path-to-goal conj current-id
-;; children loop 돌면서 재귀호출
-;; dfs
-;; 앞서 끝난 결과의 영향을 받으면 안좋음
-;; 결과를 계속 넘겨서 누산기처럼 사용
-;; 앞 결과를 기다려야하기때문에 좋은 로직은 아님
-;; 벡터(arraylist)와 리스트(linked list)
-;; 스택일 필요는 없음, 어차피 정렬이 들어가기 떄문에
-;; 우선순위 큐 표준 라이브러리 안됨
-;; dfs가 아니라 위상정렬 //
-;; 액션 후 다시
-(defn dfs
-  "그래프의 노드를 깊이 우선 탐색한다."
-  [graph root-ids]
-  (loop [stack root-ids
-         path-to-goal []]
-    (if (empty? stack)
-      path-to-goal
-      ;; let-binding 부분 함수 분리
-      (let [current-node (get graph (peek stack))
-            parents (:parents current-node)
-            children (vec (:children current-node))         ;; vec 필요없다 sequence 끼리는 잘 붙음
-            ;; 자료형 뒤에
-            path-to-goal-set (set path-to-goal)             ;; set 으로 빠른 포함여부 확인하기 위함
-            ;; 중첩보다는 내부를 let-binding으로 분해해서 조건을 하나로 보이게
-            ;; visitable? (and (or (empty? parents)
-            ;                                (every? path-to-goal-set parents))
-            ;                            (not (path-to-goal-set (:id current-node)))
-            ;; 최적화 고민
-            visitable? (and (or (empty? parents)
-                                (every? path-to-goal-set parents))
-                            (not (path-to-goal-set (:id current-node))))]
-        (recur (-> (pop stack)
-                   (concat children)
-                   (sort)
-                   (reverse)
-                   )
-               (if visitable?
-                 (conj path-to-goal (:id current-node))
-                 path-to-goal))))))
+
+;; 위상정렬
+;; 이전 단계가 없는 것들을 찾는다. v
+;; queue에 넣는다. v
+;; queue를 정렬한다. v
+;; graph, before-step 에서 dequeue한 step 제거하기 v
+;; 경로에 추가하기 v
+(defn topology-sort
+  "위상정렬 시뮬레이션 하기"
+  [graph]
+  (loop [visited []]
+    (let [queue (find-processable-step-ids graph (set visited))
+          current-id (first queue)]
+      (if (empty? queue)
+        visited
+        (recur (conj visited current-id))))))
+
+(defn- worker
+  "노동자 맵을 반환하기 위한 함수"
+  [id]
+  {:id             id
+   :process-char   nil
+   :remind-seconds nil})
+
+(defn- find-finished-worker-chars
+  "작업이 끝난 노동자의 문자 목록 확인하기"
+  [workers]
+  (->> workers
+       (filter #(zero? (:remind-seconds %)))
+       (map :process-char)))
+
+(defn- workers-pass-one-second
+  "워커들에게 1초를 흐르게 한다."
+  [workers]
+  (map (fn [worker]
+         (assoc worker :remind-seconds (dec (:remind-seconds worker)))) workers))
+
+(defn- calculate-char-process-time
+  "문자의 처리 시간을 계산해 반환한다."
+  [char]
+  (+ 61 (- (int (first char))
+           (int \A))))
+
+;; Q. workers에 step-ids를 넣으려는 시도를 할때 어떤방법이 좋을지?
+;; 두 길이중 작은 것을 이용하고 range를 이용한 for loop을 사용하는게 좋을지?
+;; 아니면 괜찮은 방법이 있을지?
+(defn assign-steps-to-workers
+  "워커에 스텝문자를 할당한다."
+  [number-of-idle-workers step-ids]
+  (let [assign-count (min number-of-idle-workers (count step-ids))
+        assigned-steps-ids (take assign-count step-ids)
+        assigned-worker_fn (fn [step-id]
+                             {:process-char   step-id
+                              :remind-seconds (calculate-char-process-time step-id)})
+        assign-workers (map assigned-worker_fn assigned-steps-ids)]
+    [assign-workers assigned-steps-ids]))
+
+;; 위상정렬 with workers
+;; 1초 흐르게 하기 v
+;; 완료된 worker 찾기 v
+;; 원료된 worker의 문자를 찾아서 graph에서 제거하기 v
+;;ㅇ
+(defn simulation-with-workers
+  "위상정렬 워커와 함께 해보기"
+  [graph number-of-workers]
+  (loop [workers []
+         visited #{}                                        ;; part1은 순서가 상관있어서 vector를 사용했지만, 이젠 단순 방문여부만 알면 되기때문에 set으로 선택
+         in-process #{}                                     ;; 진행중인 step은 대상이 될 수 없기에 (점유) in-process set을 추가
+         time 0]                                            ;; 잔행되는 시간
+    (if (= (count graph) (count visited))
+      time
+      (let [processable-step-ids (find-processable-step-ids graph visited in-process)
+            number-of-idle-workers (- number-of-workers (count workers))
+            [assigned-workers assigned-step-ids] (assign-steps-to-workers number-of-idle-workers processable-step-ids)
+
+            workers' (into workers assigned-workers)
+            in-process' (into in-process assigned-step-ids)
+
+            pass-one-second-workers (workers-pass-one-second workers')
+            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
+            ]
+        (recur (filter #(< 0 (:remind-seconds %)) pass-one-second-workers)
+               (into visited finished-workers-chars)
+               in-process'
+               (inc time))))))
+
 (comment
-  (concat [2 3 4] '(1 2 3))
-  (sort [3 2 1])
-  (peek '(3 2 1))
-  (peek [3 2 1]))
+  (into [] '(1 2 3)))
 
 ;; == Aggregate ==
 (defn solve-part1
-  "깊이 우선 탐색을 통해서 경로를 탐색한다."
+  "매번 재정렬이 필요한(우선순위큐)가 있는 위상정렬문제"
   [lines]
   (let [graph (->> lines
                    (map parse-instruction)
-                   (reduce-to-graph))
-        root-ids (find-root-ids graph)]
-    (->> (dfs graph root-ids)
-         (flatten)
+                   (reduce-to-graph))]
+    (->> (topology-sort graph)
          (apply str))))
 
 (defn sum-of-its-part1
@@ -175,3 +227,20 @@ Step F must be finished before step E can begin."))
 ;; loop <-> iterate
 ;; iterate는 종료 조건을 줘야함
 ;; 함수를 많이 쪼개기 / 시뮬레이션
+
+(defn solve-part2
+  "워커가 있는 스케쥴링 문제"
+  [lines number-of-workers]
+  (let [graph (->> lines
+                   (map parse-instruction)
+                   (reduce-to-graph))]
+    (simulation-with-workers graph number-of-workers)))
+
+(defn sum-of-its-part2
+  [lines number-of-workers]
+  (solve-part2 lines number-of-workers))
+
+(comment
+  #_(sum-of-its-part2 sample-input 2)
+  (sum-of-its-part2 (->> (slurp "resources/aoc2018_7.sample.txt")
+                         (str/split-lines)) 5))
