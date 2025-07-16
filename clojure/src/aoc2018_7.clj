@@ -7,11 +7,11 @@
   "출력하고 데이터 반환하는 헬퍼 함수"
   ([data]
    (do
-     ;(println data)
+     (println data)
      data))
   ([prefix data]
    (do
-     ;(println prefix data)
+     (println prefix data)
      data)))
 
 
@@ -126,11 +126,11 @@ Step F must be finished before step E can begin."))
   "위상정렬 시뮬레이션 하기"
   [graph]
   (loop [visited []]
-    (let [queue (find-processable-step-ids graph (set (println-data-bypass "visited" visited)))
-          current-id (first (println-data-bypass "queue" queue))]
+    (let [queue (find-processable-step-ids graph (set visited))
+          current-id (first queue)]
       (if (empty? queue)
         visited
-        (recur (conj visited (println-data-bypass "current-id" current-id)))))))
+        (recur (conj visited current-id))))))
 
 (defn- worker
   "노동자 맵을 반환하기 위한 함수"
@@ -170,8 +170,7 @@ Step F must be finished before step E can begin."))
                              {:process-char   step-id
                               :remind-seconds (calculate-char-process-time step-id)})
         assign-workers (map assigned-worker_fn assigned-steps-ids)]
-    [(println-data-bypass "assign-workers" assign-workers)
-     (println-data-bypass "assigned-steps-ids" assigned-steps-ids)]))
+    [assign-workers assigned-steps-ids]))
 
 ;; 위상정렬 with workers
 ;; 1초 흐르게 하기 v
@@ -187,15 +186,15 @@ Step F must be finished before step E can begin."))
          time 0]                                            ;; 잔행되는 시간
     (if (= (count graph) (count visited))
       time
-      (let [processable-step-ids (find-processable-step-ids graph (println-data-bypass "visited" visited) (println-data-bypass "in-process" in-process))
-            number-of-idle-workers (- number-of-workers (count (println-data-bypass "workers" workers)))
+      (let [processable-step-ids (find-processable-step-ids graph visited in-process)
+            number-of-idle-workers (- number-of-workers (count workers))
             [assigned-workers assigned-step-ids] (assign-steps-to-workers number-of-idle-workers processable-step-ids)
 
             workers' (into workers assigned-workers)
             in-process' (into in-process assigned-step-ids)
 
-            pass-one-second-workers (workers-pass-one-second (println-data-bypass "workers'" workers'))
-            finished-workers-chars (find-finished-worker-chars (println-data-bypass "pass-one-second-workers" pass-one-second-workers))
+            pass-one-second-workers (workers-pass-one-second workers')
+            finished-workers-chars (find-finished-worker-chars pass-one-second-workers)
             ]
         (recur (filter #(< 0 (:remind-seconds %)) pass-one-second-workers)
                (into visited finished-workers-chars)
